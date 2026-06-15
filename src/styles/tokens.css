@@ -1,0 +1,137 @@
+/* Design tokens — single source of truth for color, type, spacing, motion.
+   Direction: premium system-utility. Cool neutrals, a vivid teal→green accent
+   that reads as "healthy / cleaned", real depth via layered surfaces.
+   Light is the default; [data-theme="dark"] overrides. */
+
+:root {
+  /* ---- Brand / accent ramp (teal → green, the "clean" signal) ---- */
+  --accent: oklch(64% 0.15 195);
+  --accent-strong: oklch(56% 0.16 195);
+  --accent-soft: oklch(95% 0.04 195);
+  --accent-contrast: oklch(99% 0 0);
+  --good: oklch(66% 0.17 150); /* freed / healthy */
+  --warn: oklch(74% 0.16 75); /* review needed */
+  --danger: oklch(58% 0.2 25); /* destructive */
+
+  /* Category colors (used by treemap / sunburst / bars) */
+  --cat-system: oklch(62% 0.12 265);
+  --cat-applications: oklch(64% 0.15 195);
+  --cat-developer: oklch(60% 0.14 300);
+  --cat-documents: oklch(70% 0.13 230);
+  --cat-media: oklch(68% 0.16 25);
+  --cat-caches: oklch(74% 0.15 75);
+  --cat-logs: oklch(72% 0.11 110);
+  --cat-trash: oklch(58% 0.04 260);
+  --cat-downloads: oklch(66% 0.15 150);
+  --cat-archives: oklch(63% 0.13 330);
+  --cat-other: oklch(70% 0.02 260);
+
+  /* ---- Light theme surfaces ---- */
+  --bg: oklch(97.5% 0.005 240);
+  --bg-elevated: oklch(99.5% 0.003 240);
+  --surface: oklch(100% 0 0);
+  --surface-2: oklch(98% 0.004 240);
+  --surface-3: oklch(95.5% 0.006 240);
+  --surface-glass: oklch(100% 0 0 / 0.7);
+  --border: oklch(90% 0.008 240);
+  --border-strong: oklch(84% 0.01 240);
+
+  --text: oklch(22% 0.01 250);
+  --text-muted: oklch(45% 0.01 250);
+  --text-faint: oklch(62% 0.01 250);
+  --text-on-accent: oklch(99% 0 0);
+
+  --shadow-sm: 0 1px 2px oklch(20% 0.02 250 / 0.06),
+    0 1px 1px oklch(20% 0.02 250 / 0.04);
+  --shadow-md: 0 4px 12px oklch(20% 0.02 250 / 0.08),
+    0 2px 4px oklch(20% 0.02 250 / 0.05);
+  --shadow-lg: 0 18px 48px oklch(20% 0.03 250 / 0.14),
+    0 6px 16px oklch(20% 0.02 250 / 0.08);
+  --ring: 0 0 0 3px oklch(64% 0.15 195 / 0.35);
+
+  /* ---- Typography ---- */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Cascadia Code", ui-monospace,
+    Menlo, Consolas, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+  --text-2xl: clamp(2rem, 1.2rem + 2.4vw, 3rem);
+  --text-display: clamp(2.6rem, 1.4rem + 4vw, 4.5rem);
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ---- Spacing & radius ---- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+  --space-10: 4rem;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 999px;
+
+  /* ---- Motion ---- */
+  --duration-fast: 140ms;
+  --duration-normal: 240ms;
+  --duration-slow: 420ms;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ---- Layout ---- */
+  --sidebar-width: 248px;
+  --agent-width: 420px;
+  --header-height: 60px;
+}
+
+[data-theme="dark"] {
+  --accent: oklch(70% 0.15 195);
+  --accent-strong: oklch(76% 0.15 195);
+  --accent-soft: oklch(30% 0.05 195);
+  --good: oklch(72% 0.17 150);
+  --warn: oklch(78% 0.15 75);
+  --danger: oklch(66% 0.19 25);
+
+  --bg: oklch(18% 0.012 255);
+  --bg-elevated: oklch(21% 0.014 255);
+  --surface: oklch(23% 0.014 255);
+  --surface-2: oklch(26% 0.015 255);
+  --surface-3: oklch(30% 0.016 255);
+  --surface-glass: oklch(24% 0.014 255 / 0.7);
+  --border: oklch(32% 0.016 255);
+  --border-strong: oklch(40% 0.018 255);
+
+  --text: oklch(95% 0.005 255);
+  --text-muted: oklch(72% 0.01 255);
+  --text-faint: oklch(56% 0.012 255);
+
+  --shadow-sm: 0 1px 2px oklch(0% 0 0 / 0.3);
+  --shadow-md: 0 6px 16px oklch(0% 0 0 / 0.4);
+  --shadow-lg: 0 22px 56px oklch(0% 0 0 / 0.55);
+  --ring: 0 0 0 3px oklch(70% 0.15 195 / 0.4);
+
+  --cat-trash: oklch(64% 0.03 260);
+  --cat-other: oklch(60% 0.02 260);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+  }
+}

@@ -1,0 +1,309 @@
+/* UI primitives — Button, IconButton, SurfaceCard, Segmented, ProgressRing,
+   EmptyState. All color/spacing/motion comes from tokens.css. Motion is
+   limited to transform/opacity for compositor-friendly animation. */
+
+/* ============================ Button ============================ */
+.tc-btn {
+  --_pad-y: var(--space-2);
+  --_pad-x: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--_pad-y) var(--_pad-x);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  user-select: none;
+  border: 1px solid transparent;
+  transition:
+    transform var(--duration-fast) var(--ease-out-expo),
+    background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease,
+    opacity var(--duration-fast) ease;
+}
+.tc-btn:active {
+  transform: scale(0.97);
+}
+.tc-btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.tc-btn--block {
+  width: 100%;
+}
+.tc-btn--sm {
+  --_pad-y: var(--space-1);
+  --_pad-x: var(--space-3);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
+}
+.tc-btn--lg {
+  --_pad-y: var(--space-3);
+  --_pad-x: var(--space-5);
+  font-size: var(--text-md);
+  border-radius: var(--radius-lg);
+}
+.tc-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.1em;
+  line-height: 0;
+}
+
+/* primary — vivid accent, the "do it" action */
+.tc-btn--primary {
+  background: linear-gradient(
+    180deg,
+    var(--accent) 0%,
+    var(--accent-strong) 100%
+  );
+  color: var(--text-on-accent);
+  box-shadow: var(--shadow-sm);
+}
+.tc-btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.tc-btn--primary:active {
+  transform: scale(0.97);
+}
+
+/* danger — destructive */
+.tc-btn--danger {
+  background: var(--danger);
+  color: var(--text-on-accent);
+  box-shadow: var(--shadow-sm);
+}
+.tc-btn--danger:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+  filter: brightness(1.05);
+}
+
+/* subtle — quiet filled surface button (default) */
+.tc-btn--subtle {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+.tc-btn--subtle:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+
+/* ghost — text-only until hovered */
+.tc-btn--ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+.tc-btn--ghost:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* ========================== IconButton ========================== */
+.tc-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  transition:
+    transform var(--duration-fast) var(--ease-out-expo),
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+}
+.tc-icon-btn__glyph {
+  display: inline-flex;
+  line-height: 0;
+  font-size: 1.05rem;
+}
+.tc-icon-btn--sm {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+}
+.tc-icon-btn--lg {
+  width: 42px;
+  height: 42px;
+}
+.tc-icon-btn:active {
+  transform: scale(0.92);
+}
+.tc-icon-btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.tc-icon-btn--ghost:hover,
+.tc-icon-btn--subtle:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.tc-icon-btn--subtle {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+.tc-icon-btn--primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+.tc-icon-btn--primary:hover {
+  filter: brightness(1.06);
+}
+.tc-icon-btn--danger:hover {
+  background: color-mix(in oklch, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+.tc-icon-btn.is-active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-color: color-mix(in oklch, var(--accent) 30%, transparent);
+}
+
+/* ========================== SurfaceCard ========================= */
+.tc-surface {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  transition:
+    transform var(--duration-normal) var(--ease-out-expo),
+    box-shadow var(--duration-normal) ease,
+    border-color var(--duration-fast) ease;
+}
+.tc-surface--flush {
+  padding: 0;
+  overflow: hidden;
+}
+.tc-surface--flat {
+  box-shadow: none;
+}
+.tc-surface--sm {
+  box-shadow: var(--shadow-sm);
+}
+.tc-surface--md {
+  box-shadow: var(--shadow-md);
+}
+.tc-surface--lg {
+  box-shadow: var(--shadow-lg);
+}
+.tc-surface--interactive {
+  cursor: pointer;
+}
+.tc-surface--interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-strong);
+}
+.tc-surface--interactive:active {
+  transform: translateY(0);
+}
+
+/* ========================== Segmented ========================== */
+.tc-segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.tc-segmented__item {
+  padding: var(--space-2) var(--space-4);
+  border-radius: calc(var(--radius-md) - 3px);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+  transition:
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease;
+}
+.tc-segmented--sm .tc-segmented__item {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+.tc-segmented__item:hover {
+  color: var(--text);
+}
+.tc-segmented__item.is-selected {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ========================= ProgressRing ======================== */
+.tc-ring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+.tc-ring__svg {
+  display: block;
+}
+.tc-ring__track {
+  stroke: var(--surface-3);
+}
+.tc-ring__value {
+  transition: stroke-dashoffset var(--duration-slow) var(--ease-out-expo);
+}
+.tc-ring__label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-md);
+  color: var(--text);
+  text-align: center;
+  line-height: 1.1;
+}
+
+/* ========================== EmptyState ========================= */
+.tc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-10) var(--space-6);
+  color: var(--text-muted);
+}
+.tc-empty--compact {
+  padding: var(--space-6) var(--space-4);
+  gap: var(--space-2);
+}
+.tc-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 1.5rem;
+}
+.tc-empty__title {
+  font-size: var(--text-md);
+  color: var(--text);
+}
+.tc-empty__desc {
+  max-width: 38ch;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.tc-empty__action {
+  margin-top: var(--space-2);
+}
