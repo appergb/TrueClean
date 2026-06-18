@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="TrueClean icon">
+  <title>TrueClean</title>
+  <defs>
+    <linearGradient id="tc-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#13A6B8"/>
+      <stop offset="1" stop-color="#1CB46A"/>
+    </linearGradient>
+    <radialGradient id="tc-sheen" cx="0.28" cy="0.22" r="0.85">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="tc-ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eafff5"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="url(#tc-bg)"/>
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="url(#tc-sheen)"/>
+  <path d="M 268 394 A 138 138 0 1 0 394 268" fill="none" stroke="url(#tc-ring)" stroke-width="54" stroke-linecap="round"/>
+  <path d="M 210,138 L 221,189 L 272,200 L 221,211 L 210,262 L 199,211 L 148,200 L 199,189 Z" fill="#ffffff"/>
+  <path d="M 322,292 L 327,313 L 348,318 L 327,323 L 322,344 L 317,323 L 296,318 L 317,313 Z" fill="#ffffff" opacity="0.92"/>
+</svg>
