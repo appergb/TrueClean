@@ -1,7 +1,9 @@
-// Agent panel state: drawer open/close, chat messages, streaming tool events.
-// UI talks to the backend only through `src/lib/ipc.ts`.
+// Agent panel state: drawer open/close, chat messages, streaming tool events,
+// and destructive-tool confirmation flow. UI talks to the backend only through
+// `src/lib/ipc.ts` (commands) + the Tauri event bus (confirmation responses).
 
 import { create } from "zustand";
+import { emit } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import type { AgentEvent, ChatMessage } from "../lib/types";
 import { agentChat, agentCancel, onAgentEvent } from "../lib/ipc";
@@ -22,6 +24,16 @@ export interface ToolEvent {
   seq: number;
 }
 
+/** A pending destructive-tool confirmation request from the runner.
+ *  The UI shows a dialog; the user's choice is sent back via
+ *  `emit('agent://confirm', { id, approved })`. */
+export interface ConfirmationRequest {
+  id: string;
+  toolName: string;
+  args: unknown;
+  summary: string;
+}
+
 interface AgentState {
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -29,12 +41,16 @@ interface AgentState {
 
   messages: ChatMessage[];
   events: ToolEvent[];
+  confirmations: ConfirmationRequest[];
   status: AgentStatus;
   error: string | null;
 
   send: (text: string) => Promise<void>;
   cancel: () => void;
   reset: () => void;
+  /** Resolve a pending confirmation: emits the `agent://confirm` event the
+   *  runner listens for and removes the request from the pending list. */
+  confirm: (id: string, approved: boolean) => void;
 }
 
 // Module-level handles for the in-flight stream. Kept outside the store so they
@@ -68,6 +84,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   messages: [],
   events: [],
+  confirmations: [],
   status: "idle",
   error: null,
 
@@ -137,6 +154,20 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           }));
           break;
         }
+        case "confirmationRequest": {
+          set((s) => ({
+            confirmations: [
+              ...s.confirmations,
+              {
+                id: event.id,
+                toolName: event.toolName,
+                args: event.args,
+                summary: event.summary,
+              },
+            ],
+          }));
+          break;
+        }
         case "done": {
           set({ status: "idle" });
           void teardown();
@@ -175,7 +206,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     if (!sessionId) return;
     // Detach immediately so late events are ignored, then tell the backend.
     void teardown();
-    set({ status: "idle" });
+    set({ status: "idle", confirmations: [] });
     void agentCancel(sessionId).catch(() => {
       // best-effort: backend may have already finished
     });
@@ -183,7 +214,19 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   reset: () => {
     get().cancel();
-    set({ messages: [], events: [], status: "idle", error: null });
+    set({ messages: [], events: [], confirmations: [], status: "idle", error: null });
+  },
+
+  confirm: (id, approved) => {
+    // Remove the confirmation from the pending list immediately so the
+    // dialog disappears, then emit the response event the runner awaits.
+    set((s) => ({
+      confirmations: s.confirmations.filter((c) => c.id !== id),
+    }));
+    void emit("agent://confirm", { id, approved }).catch(() => {
+      // best-effort: if the emit fails the runner's 5-min timeout will
+      // auto-deny, keeping the session from hanging forever.
+    });
   },
 }));
 

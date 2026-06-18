@@ -485,3 +485,304 @@
   color: var(--text-faint);
   text-align: center;
 }
+
+/* ---- AI key hint -------------------------------------------------------- */
+
+.agent-aihint {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-3) var(--space-5) 0;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in oklch, var(--accent) 24%, var(--border));
+  background: var(--accent-soft);
+}
+.agent-aihint__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+.agent-aihint__body {
+  flex: 1;
+  min-width: 0;
+}
+.agent-aihint__title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.agent-aihint__desc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.5;
+}
+.agent-aihint__btn {
+  flex: none;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-on-accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  white-space: nowrap;
+  transition: transform var(--duration-fast) var(--ease-out-expo);
+}
+.agent-aihint__btn:hover {
+  transform: translateY(-1px);
+}
+
+/* ---- Tool card states --------------------------------------------------- */
+
+.tool-card.is-error { border-color: var(--danger); }
+.tool-card.is-skipped { border-color: var(--text-faint); opacity: 0.7; }
+.tool-card.is-error .tool-card__icon { background: var(--danger); }
+.tool-card.is-skipped .tool-card__icon { background: var(--text-faint); }
+.tool-card__state--error { color: var(--danger); }
+.tool-card__state--skipped { color: var(--text-faint); }
+/* Highlights (key findings) — shown collapsed under the header */
+.tool-card__highlights,
+.tool-card__highlight-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.tool-card__highlight {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-1) var(--space-2);
+  border-left: 2px solid var(--text-faint);
+  font-size: var(--text-xs);
+}
+.tool-card__highlight.is-actionable {
+  border-left-color: var(--good);
+}
+.tool-card__highlight-finding {
+  font-weight: var(--weight-medium);
+  color: var(--text);
+}
+.tool-card__highlight-detail {
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* ---- Structured suggestions --------------------------------------------- */
+
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.suggestions__preamble {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.suggestion-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.suggestion-card--clean {
+  border-color: color-mix(in oklch, var(--good) 40%, var(--border));
+  background: color-mix(in oklch, var(--good) 8%, var(--surface));
+}
+.suggestion-card--review {
+  border-color: color-mix(in oklch, var(--warn) 40%, var(--border));
+  background: color-mix(in oklch, var(--warn) 8%, var(--surface));
+}
+.suggestion-card--danger {
+  border-color: color-mix(in oklch, var(--danger) 40%, var(--border));
+  background: color-mix(in oklch, var(--danger) 8%, var(--surface));
+}
+.suggestion-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+.suggestion-card__dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: var(--radius-full);
+}
+.suggestion-card--clean .suggestion-card__dot {
+  background: var(--good);
+}
+.suggestion-card--review .suggestion-card__dot {
+  background: var(--warn);
+}
+.suggestion-card--danger .suggestion-card__dot {
+  background: var(--danger);
+}
+.suggestion-card__title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.suggestion-card__desc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.suggestion-card__items {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.suggestion-card__item {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text);
+  padding-left: var(--space-3);
+  position: relative;
+  word-break: break-word;
+}
+.suggestion-card__item::before {
+  content: "·";
+  position: absolute;
+  left: var(--space-1);
+  color: var(--text-faint);
+}
+.suggestions__total {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-3);
+  font-size: var(--text-sm);
+}
+.suggestions__total-label {
+  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+}
+.suggestions__total-value {
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+}
+
+/* ---- Confirmation dialog ------------------------------------------------ */
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background: oklch(20% 0.02 250 / 0.45);
+  animation: tc-fade-in var(--duration-fast) ease;
+}
+.confirm-dialog {
+  width: min(380px, 92vw);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.confirm-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in oklch, var(--danger) 12%, var(--surface-2));
+  border-bottom: 1px solid var(--border);
+}
+.confirm-dialog__badge {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: var(--radius-full);
+  background: var(--danger);
+  color: var(--accent-contrast);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+.confirm-dialog__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+.confirm-dialog__body {
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.confirm-dialog__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.confirm-dialog__label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  font-weight: var(--weight-semibold);
+}
+.confirm-dialog__tool {
+  font-size: var(--text-sm);
+  color: var(--accent-strong);
+}
+.confirm-dialog__summary {
+  font-size: var(--text-base);
+  color: var(--text);
+  line-height: 1.5;
+}
+.confirm-dialog__warning {
+  font-size: var(--text-xs);
+  color: var(--danger);
+  line-height: 1.5;
+}
+.confirm-dialog__actions {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.confirm-dialog__btn {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  transition: background var(--duration-fast) var(--ease-out-expo),
+    transform var(--duration-fast) var(--ease-out-expo);
+}
+.confirm-dialog__btn--deny {
+  color: var(--text-muted);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+}
+.confirm-dialog__btn--deny:hover {
+  background: var(--surface);
+}
+.confirm-dialog__btn--approve {
+  color: var(--accent-contrast);
+  background: linear-gradient(135deg, var(--danger), oklch(50% 0.2 25));
+  box-shadow: var(--shadow-sm);
+}
+.confirm-dialog__btn--approve:hover {
+  transform: translateY(-1px);
+}

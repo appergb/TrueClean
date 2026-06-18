@@ -1,17 +1,31 @@
 // Right-side drawer hosting the AI assistant: header (title / clear / close),
-// transcript, and composer. Slides in via transform when `open`.
+// transcript, confirmation dialog for destructive tools, AI-key hint, and
+// composer. Slides in via transform when `open`.
 
 import { useAgent } from "../../hooks/useAgent";
+import { useI18n } from "../../i18n";
+import { useSettingsStore } from "../../store/settingsStore";
+import type { AppSettings } from "../../lib/types";
 import MessageList from "./MessageList";
 import Composer from "./Composer";
+import ConfirmDialog from "./ConfirmDialog";
 import "./agent.css";
 
-const SUGGESTIONS = [
-  "帮我看看哪些缓存可以安全清理",
-  "扫描一下我的下载文件夹，有什么大文件",
-  "我的磁盘空间被什么占用最多？",
-  "有哪些应用很久没用了，可以卸载？",
-];
+/** A provider is considered ready when its required credential is set.
+ *  Mirrors the logic in Overview (B1) so the hint stays consistent. */
+function isAiConfigured(settings: AppSettings | null): boolean {
+  if (!settings) return true; // hide the hint while settings are still loading
+  switch (settings.provider) {
+    case "claude":
+      return settings.claudeApiKey.trim().length > 0;
+    case "openai":
+      return settings.openaiApiKey.trim().length > 0;
+    case "ollama":
+      return settings.ollamaBaseUrl.trim().length > 0;
+    default:
+      return true;
+  }
+}
 
 export default function AgentPanel() {
   const {
@@ -19,14 +33,20 @@ export default function AgentPanel() {
     setOpen,
     messages,
     events,
+    confirmations,
     error,
     isStreaming,
     send,
     cancel,
     reset,
+    confirm,
   } = useAgent();
+  const { t } = useI18n();
+  const settings = useSettingsStore((s) => s.settings);
 
   const isEmpty = messages.length === 0;
+  const showAiHint = !isAiConfigured(settings);
+  const suggestions = t("agent.empty.suggestions") as unknown as string[];
 
   return (
     <>
@@ -37,13 +57,13 @@ export default function AgentPanel() {
       />
       <aside
         className={`agent-panel${open ? " is-open" : ""}`}
-        aria-label="AI 助手"
+        aria-label={t("agent.title")}
         aria-hidden={!open}
       >
         <header className="agent-header">
           <div className="agent-header__title">
             <span className="agent-header__spark" aria-hidden="true" />
-            <h2>AI 助手</h2>
+            <h2>{t("agent.title")}</h2>
           </div>
           <div className="agent-header__actions">
             <button
@@ -51,8 +71,8 @@ export default function AgentPanel() {
               className="agent-iconbtn"
               onClick={reset}
               disabled={isEmpty && !isStreaming}
-              title="清空对话"
-              aria-label="清空对话"
+              title={t("agent.clear")}
+              aria-label={t("agent.clear")}
             >
               <ClearIcon />
             </button>
@@ -60,8 +80,8 @@ export default function AgentPanel() {
               type="button"
               className="agent-iconbtn"
               onClick={() => setOpen(false)}
-              title="关闭"
-              aria-label="关闭助手面板"
+              title={t("agent.close")}
+              aria-label={t("agent.close")}
             >
               <CloseIcon />
             </button>
@@ -69,30 +89,53 @@ export default function AgentPanel() {
         </header>
 
         <div className="agent-body">
+          {showAiHint && (
+            <div className="agent-aihint" role="note">
+              <span className="agent-aihint__icon" aria-hidden="true">
+                <KeyIcon />
+              </span>
+              <div className="agent-aihint__body">
+                <h3 className="agent-aihint__title">
+                  {t("agent.aiKeyHint.title")}
+                </h3>
+                <p className="agent-aihint__desc">{t("agent.aiKeyHint.desc")}</p>
+              </div>
+              <button
+                type="button"
+                className="agent-aihint__btn"
+                onClick={() => setOpen(false)}
+              >
+                {t("agent.aiKeyHint.goSettings")}
+              </button>
+            </div>
+          )}
+
           {isEmpty ? (
             <div className="agent-empty">
               <div className="agent-empty__badge" aria-hidden="true">
-                ✦
+                {t("agent.empty.badge")}
               </div>
-              <h3 className="agent-empty__title">我是 TrueClean 清理助手</h3>
-              <p className="agent-empty__sub">
-                我可以扫描磁盘、找出垃圾与大文件，并帮你安全地释放空间。
-              </p>
+              <h3 className="agent-empty__title">{t("agent.empty.title")}</h3>
+              <p className="agent-empty__sub">{t("agent.empty.sub")}</p>
               <ul className="agent-suggestions">
-                {SUGGESTIONS.map((s) => (
-                  <li key={s}>
-                    <button
-                      type="button"
-                      className="agent-suggestion"
-                      onClick={() => send(s)}
-                    >
-                      <span>{s}</span>
-                      <span className="agent-suggestion__arrow" aria-hidden="true">
-                        ↗
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                {Array.isArray(suggestions) &&
+                  suggestions.map((s) => (
+                    <li key={s}>
+                      <button
+                        type="button"
+                        className="agent-suggestion"
+                        onClick={() => send(s)}
+                      >
+                        <span>{s}</span>
+                        <span
+                          className="agent-suggestion__arrow"
+                          aria-hidden="true"
+                        >
+                          ↗
+                        </span>
+                      </button>
+                    </li>
+                  ))}
               </ul>
             </div>
           ) : (
@@ -112,11 +155,16 @@ export default function AgentPanel() {
 
         <footer className="agent-footer">
           <Composer isStreaming={isStreaming} onSend={send} onStop={cancel} />
-          <p className="agent-disclaimer">
-            助手会用工具读取真实数据；破坏性清理默认走废纸篓并请你确认。
-          </p>
+          <p className="agent-disclaimer">{t("agent.disclaimer")}</p>
         </footer>
       </aside>
+
+      {confirmations.length > 0 && (
+        <ConfirmDialog
+          confirmation={confirmations[0]}
+          onConfirm={confirm}
+        />
+      )}
     </>
   );
 }
@@ -144,6 +192,24 @@ function ClearIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function KeyIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" />
     </svg>
   );
 }

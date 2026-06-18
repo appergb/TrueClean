@@ -9,11 +9,13 @@ export function useAgent() {
   const toggle = useAgentStore((s) => s.toggle);
   const messages = useAgentStore((s) => s.messages);
   const events = useAgentStore((s) => s.events);
+  const confirmations = useAgentStore((s) => s.confirmations);
   const status = useAgentStore((s) => s.status);
   const error = useAgentStore((s) => s.error);
   const send = useAgentStore((s) => s.send);
   const cancel = useAgentStore((s) => s.cancel);
   const reset = useAgentStore((s) => s.reset);
+  const confirm = useAgentStore((s) => s.confirm);
 
   return {
     open,
@@ -21,11 +23,13 @@ export function useAgent() {
     toggle,
     messages,
     events,
+    confirmations,
     status,
     error,
     send,
     cancel,
     reset,
+    confirm,
     isStreaming: status === "streaming",
   };
 }

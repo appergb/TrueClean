@@ -1,6 +1,7 @@
 // Multiline input + send/stop. Enter sends, Shift+Enter inserts a newline.
 
 import { useLayoutEffect, useRef, useState } from "react";
+import { useI18n } from "../../i18n";
 
 interface ComposerProps {
   isStreaming: boolean;
@@ -11,6 +12,7 @@ interface ComposerProps {
 const MAX_TEXTAREA_HEIGHT = 160;
 
 export default function Composer({ isStreaming, onSend, onStop }: ComposerProps) {
+  const { t } = useI18n();
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -53,25 +55,25 @@ export default function Composer({ isStreaming, onSend, onStop }: ComposerProps)
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         rows={1}
-        placeholder="问问 TrueClean 助手，例如「哪些缓存可以安全清理？」"
-        aria-label="给 AI 助手发送消息"
+        placeholder={t("agent.composer.placeholder")}
+        aria-label={t("agent.composer.ariaInput")}
       />
       {isStreaming ? (
         <button
           type="button"
           className="composer__btn composer__btn--stop"
           onClick={onStop}
-          aria-label="停止生成"
+          aria-label={t("agent.composer.ariaStop")}
         >
           <span className="composer__stop-glyph" aria-hidden="true" />
-          停止
+          {t("agent.composer.stop")}
         </button>
       ) : (
         <button
           type="submit"
           className="composer__btn composer__btn--send"
           disabled={!canSend}
-          aria-label="发送"
+          aria-label={t("agent.composer.ariaSend")}
         >
           <SendIcon />
         </button>

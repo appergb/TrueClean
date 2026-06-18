@@ -1,27 +1,60 @@
 // One tool invocation in the transcript: name + args summary + result summary,
-// collapsible, with raw JSON shown in mono when expanded.
+// collapsible, with highlights (key findings) shown prominently and raw JSON
+// available when expanded. Distinguishes running / done / failed / skipped.
 
 import { useState } from "react";
 import type { ToolEvent } from "../../store/agentStore";
+import { useI18n } from "../../i18n";
 
 interface ToolCallCardProps {
   event: ToolEvent;
 }
 
 const TOOL_LABELS: Record<string, string> = {
-  list_volumes: "列出磁盘",
-  scan_directory: "扫描目录",
-  scan_junk: "扫描系统垃圾",
-  find_large_old_files: "查找大文件/旧文件",
-  find_duplicates: "查找重复文件",
-  list_applications: "列出应用",
-  list_startup_items: "列出启动项",
-  clean_paths: "清理路径",
-  empty_trash: "清空废纸篓",
+  list_volumes: "list_volumes",
+  scan_directory: "scan_directory",
+  scan_junk: "scan_junk",
+  find_large_old_files: "find_large_old_files",
+  find_duplicates: "find_duplicates",
+  list_applications: "list_applications",
+  list_startup_items: "list_startup_items",
+  analyze_disk_health: "analyze_disk_health",
+  clean_paths: "clean_paths",
+  empty_trash: "empty_trash",
 };
 
-function toolLabel(name: string): string {
-  return TOOL_LABELS[name] ?? name;
+interface Highlight {
+  finding: string;
+  detail: string;
+  actionable: boolean;
+}
+
+/** Extract the `highlights` array from a tool result object, if present. */
+function extractHighlights(result: unknown): Highlight[] {
+  if (!result || typeof result !== "object") return [];
+  const obj = result as Record<string, unknown>;
+  const raw = obj.highlights;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((h): h is Highlight => {
+      if (!h || typeof h !== "object") return false;
+      const o = h as Record<string, unknown>;
+      return typeof o.finding === "string" && typeof o.detail === "string";
+    })
+    .slice(0, 5);
+}
+
+/** Detect whether a tool result represents an error or a user-skipped action. */
+function resultState(
+  result: unknown,
+): "pending" | "done" | "error" | "skipped" {
+  if (result === undefined) return "pending";
+  if (result && typeof result === "object") {
+    const obj = result as Record<string, unknown>;
+    if (typeof obj.error === "string") return "error";
+    if (obj.skipped === true) return "skipped";
+  }
+  return "done";
 }
 
 function prettyJson(value: unknown): string {
@@ -49,13 +82,33 @@ function summarize(value: unknown): string {
   return String(value);
 }
 
+const MAX_RESULT_CHARS = 2000;
+
 export default function ToolCallCard({ event }: ToolCallCardProps) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const pending = event.result === undefined;
+
+  const state = resultState(event.result);
   const argsSummary = summarize(event.args);
+  const highlights = extractHighlights(event.result);
+
+  const stateLabel =
+    state === "pending"
+      ? t("agent.tool.statePending")
+      : state === "error"
+        ? t("agent.tool.stateError")
+        : state === "skipped"
+          ? t("agent.tool.stateSkipped")
+          : t("agent.tool.stateDone");
+
+  const rawJson = prettyJson(event.result);
+  const truncated = rawJson.length > MAX_RESULT_CHARS;
+  const displayJson = truncated
+    ? `${rawJson.slice(0, MAX_RESULT_CHARS)}…\n${t("agent.tool.truncated")}`
+    : rawJson;
 
   return (
-    <div className={`tool-card${pending ? " is-pending" : ""}`}>
+    <div className={`tool-card is-${state}`}>
       <button
         type="button"
         className="tool-card__head"
@@ -63,16 +116,18 @@ export default function ToolCallCard({ event }: ToolCallCardProps) {
         aria-expanded={expanded}
       >
         <span className="tool-card__icon" aria-hidden="true">
-          {pending ? "•" : "✓"}
+          {state === "pending" ? "•" : state === "error" ? "!" : state === "skipped" ? "⊘" : "✓"}
         </span>
         <span className="tool-card__title">
-          <span className="tool-card__name">{toolLabel(event.name)}</span>
+          <span className="tool-card__name">
+            {TOOL_LABELS[event.name] ?? event.name}
+          </span>
           {argsSummary && (
             <span className="tool-card__args mono">{argsSummary}</span>
           )}
         </span>
-        <span className="tool-card__state">
-          {pending ? "执行中" : "完成"}
+        <span className={`tool-card__state tool-card__state--${state}`}>
+          {stateLabel}
         </span>
         <span
           className={`tool-card__chevron${expanded ? " is-open" : ""}`}
@@ -82,18 +137,52 @@ export default function ToolCallCard({ event }: ToolCallCardProps) {
         </span>
       </button>
 
+      {highlights.length > 0 && !expanded && (
+        <ul className="tool-card__highlights" aria-label={t("agent.tool.highlights")}>
+          {highlights.map((h, i) => (
+            <li
+              key={i}
+              className={`tool-card__highlight${h.actionable ? " is-actionable" : ""}`}
+            >
+              <span className="tool-card__highlight-finding">{h.finding}</span>
+              {h.detail && (
+                <span className="tool-card__highlight-detail">{h.detail}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
       {expanded && (
         <div className="tool-card__body">
+          {highlights.length > 0 && (
+            <section className="tool-card__section">
+              <h4 className="tool-card__label">{t("agent.tool.highlights")}</h4>
+              <ul className="tool-card__highlight-list">
+                {highlights.map((h, i) => (
+                  <li
+                    key={i}
+                    className={`tool-card__highlight${h.actionable ? " is-actionable" : ""}`}
+                  >
+                    <span className="tool-card__highlight-finding">{h.finding}</span>
+                    {h.detail && (
+                      <span className="tool-card__highlight-detail">{h.detail}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <section className="tool-card__section">
-            <h4 className="tool-card__label">参数</h4>
+            <h4 className="tool-card__label">{t("agent.tool.args")}</h4>
             <pre className="tool-card__code mono">
-              {prettyJson(event.args) || "（无）"}
+              {prettyJson(event.args) || "—"}
             </pre>
           </section>
           <section className="tool-card__section">
-            <h4 className="tool-card__label">结果</h4>
+            <h4 className="tool-card__label">{t("agent.tool.result")}</h4>
             <pre className="tool-card__code mono">
-              {pending ? "等待结果…" : prettyJson(event.result) || "（无）"}
+              {state === "pending" ? t("agent.tool.noResult") : displayJson || "—"}
             </pre>
           </section>
         </div>
