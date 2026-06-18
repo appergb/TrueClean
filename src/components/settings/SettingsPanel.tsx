@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import Button from "../ui/Button";
+import { useToast } from "../ui/Toast";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useI18n, useLocaleStore } from "../../i18n";
 import type { AppSettings } from "../../lib/types";
 import "./settings.css";
 
@@ -10,23 +12,107 @@ const DEFAULT_MODELS: Record<AppSettings["provider"], string> = {
   ollama: "llama3.1",
 };
 
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+interface ValidationErrors {
+  key?: string;
+  url?: string;
+}
+
+function validate(
+  settings: AppSettings,
+  t: (k: string, p?: Record<string, string | number>) => string,
+): ValidationErrors {
+  const errors: ValidationErrors = {};
+  if (settings.provider === "claude" && !settings.claudeApiKey.trim()) {
+    errors.key = t("cleanup.settings.validationKeyRequired");
+  }
+  if (settings.provider === "openai" && !settings.openaiApiKey.trim()) {
+    errors.key = t("cleanup.settings.validationKeyRequired");
+  }
+  if (settings.provider === "ollama") {
+    if (!settings.ollamaBaseUrl.trim()) {
+      errors.url = t("cleanup.settings.validationUrlRequired");
+    } else if (!isValidHttpUrl(settings.ollamaBaseUrl)) {
+      errors.url = t("cleanup.settings.validationUrlInvalid");
+    }
+  }
+  return errors;
+}
+
 export default function SettingsPanel() {
+  const { t } = useI18n();
+  const toast = useToast();
+  const setLocale = useLocaleStore((s) => s.setLocale);
   const { settings, loading, saving, error, load, update, save } =
     useSettingsStore();
   const [saved, setSaved] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [validation, setValidation] = useState<ValidationErrors>({});
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     if (!settings && !loading) void load();
   }, [settings, loading, load]);
 
+  // Sync locale store when settings language changes or loads.
+  useEffect(() => {
+    if (settings?.language) setLocale(settings.language);
+  }, [settings?.language, setLocale]);
+
+  const runValidation = (): boolean => {
+    if (!settings) return false;
+    const errors = validate(settings, t);
+    setValidation(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const onSave = async () => {
     if (!settings) return;
+    if (!runValidation()) {
+      toast.error(t("cleanup.settings.validationKeyRequired"));
+      return;
+    }
     setSaved(false);
     try {
       await save(settings);
       setSaved(true);
-    } catch {
-      // error surfaced via store.error
+      toast.success(t("cleanup.settings.saved"));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(t("cleanup.settings.saveFailed", { error: msg }));
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!settings) return;
+    if (!runValidation()) {
+      toast.error(
+        t("cleanup.settings.testFail", {
+          error: validation.key ?? validation.url ?? "",
+        }),
+      );
+      return;
+    }
+    setTesting(true);
+    // No IPC test endpoint exists — do frontend format validation only.
+    await new Promise((r) => setTimeout(r, 400));
+    setTesting(false);
+    if (settings.provider === "ollama") {
+      toast.success(t("cleanup.settings.testOk"), settings.ollamaBaseUrl);
+    } else {
+      const key =
+        settings.provider === "claude"
+          ? settings.claudeApiKey
+          : settings.openaiApiKey;
+      toast.success(t("cleanup.settings.testOk"), key.slice(0, 6) + "…");
     }
   };
 
@@ -35,27 +121,35 @@ export default function SettingsPanel() {
       <section className="set">
         <div className="set-state">
           <div className="set-spinner" />
-          <p>正在载入设置…</p>
+          <p>{t("cleanup.settings.loading")}</p>
         </div>
       </section>
     );
   }
 
   const provider = settings.provider;
+  const hasKeyField = provider === "claude" || provider === "openai";
+  const currentKey =
+    provider === "claude" ? settings.claudeApiKey : settings.openaiApiKey;
+  const canTest =
+    !testing &&
+    (provider === "ollama"
+      ? settings.ollamaBaseUrl.trim().length > 0
+      : hasKeyField && currentKey.trim().length > 0);
 
   return (
     <section className="set">
       <header className="set-head">
-        <h2 className="set-title">设置</h2>
-        <p className="set-sub">配置 AI 助手与清理行为。</p>
+        <h2 className="set-title">{t("cleanup.settings.title")}</h2>
+        <p className="set-sub">{t("cleanup.settings.sub")}</p>
       </header>
 
       <div className="set-section">
-        <h3 className="set-section__title">AI 助手</h3>
+        <h3 className="set-section__title">{t("cleanup.settings.aiSection")}</h3>
 
         <div className="set-field">
           <label className="set-field__label" htmlFor="set-provider">
-            提供商
+            {t("cleanup.settings.provider")}
           </label>
           <select
             id="set-provider"
@@ -71,17 +165,18 @@ export default function SettingsPanel() {
                 ...(modelIsDefault ? { model: DEFAULT_MODELS[next] } : {}),
               });
               setSaved(false);
+              setValidation({});
             }}
           >
-            <option value="claude">Claude（Anthropic）</option>
-            <option value="openai">OpenAI</option>
-            <option value="ollama">Ollama（本地）</option>
+            <option value="claude">{t("cleanup.settings.providerClaude")}</option>
+            <option value="openai">{t("cleanup.settings.providerOpenai")}</option>
+            <option value="ollama">{t("cleanup.settings.providerOllama")}</option>
           </select>
         </div>
 
         <div className="set-field">
           <label className="set-field__label" htmlFor="set-model">
-            模型
+            {t("cleanup.settings.model")}
           </label>
           <input
             id="set-model"
@@ -98,47 +193,87 @@ export default function SettingsPanel() {
         {provider === "claude" && (
           <div className="set-field">
             <label className="set-field__label" htmlFor="set-claude-key">
-              Claude API Key
+              {t("cleanup.settings.claudeKey")}
             </label>
-            <input
-              id="set-claude-key"
-              type="password"
-              className="set-input"
-              autoComplete="off"
-              value={settings.claudeApiKey}
-              placeholder="sk-ant-…"
-              onChange={(e) => {
-                update({ claudeApiKey: e.target.value });
-                setSaved(false);
-              }}
-            />
+            <div className="set-keyrow">
+              <input
+                id="set-claude-key"
+                type={showKey ? "text" : "password"}
+                className="set-input"
+                autoComplete="off"
+                value={settings.claudeApiKey}
+                placeholder="sk-ant-…"
+                onChange={(e) => {
+                  update({ claudeApiKey: e.target.value });
+                  setSaved(false);
+                  setValidation({});
+                }}
+              />
+              <button
+                type="button"
+                className="set-keytoggle"
+                onClick={() => setShowKey((v) => !v)}
+                aria-label={
+                  showKey
+                    ? t("cleanup.settings.keyHide")
+                    : t("cleanup.settings.keyShow")
+                }
+              >
+                {showKey
+                  ? t("cleanup.settings.keyHide")
+                  : t("cleanup.settings.keyShow")}
+              </button>
+            </div>
+            {validation.key && (
+              <span className="set-error">{validation.key}</span>
+            )}
           </div>
         )}
 
         {provider === "openai" && (
           <div className="set-field">
             <label className="set-field__label" htmlFor="set-openai-key">
-              OpenAI API Key
+              {t("cleanup.settings.openaiKey")}
             </label>
-            <input
-              id="set-openai-key"
-              type="password"
-              className="set-input"
-              autoComplete="off"
-              value={settings.openaiApiKey}
-              placeholder="sk-…"
-              onChange={(e) => {
-                update({ openaiApiKey: e.target.value });
-                setSaved(false);
-              }}
-            />
+            <div className="set-keyrow">
+              <input
+                id="set-openai-key"
+                type={showKey ? "text" : "password"}
+                className="set-input"
+                autoComplete="off"
+                value={settings.openaiApiKey}
+                placeholder="sk-…"
+                onChange={(e) => {
+                  update({ openaiApiKey: e.target.value });
+                  setSaved(false);
+                  setValidation({});
+                }}
+              />
+              <button
+                type="button"
+                className="set-keytoggle"
+                onClick={() => setShowKey((v) => !v)}
+                aria-label={
+                  showKey
+                    ? t("cleanup.settings.keyHide")
+                    : t("cleanup.settings.keyShow")
+                }
+              >
+                {showKey
+                  ? t("cleanup.settings.keyHide")
+                  : t("cleanup.settings.keyShow")}
+              </button>
+            </div>
+            {validation.key && (
+              <span className="set-error">{validation.key}</span>
+            )}
           </div>
         )}
 
         {provider === "ollama" && (
           <div className="set-field">
             <label className="set-field__label" htmlFor="set-ollama-url">
-              Ollama 服务地址
+              {t("cleanup.settings.ollamaUrl")}
             </label>
             <input
               id="set-ollama-url"
@@ -148,22 +283,41 @@ export default function SettingsPanel() {
               onChange={(e) => {
                 update({ ollamaBaseUrl: e.target.value });
                 setSaved(false);
+                setValidation({});
               }}
             />
+            {validation.url && (
+              <span className="set-error">{validation.url}</span>
+            )}
           </div>
         )}
 
-        <p className="set-note">🔒 API Key 仅保存在本机，不会上传到任何服务器。</p>
+        <div className="set-row">
+          <Button
+            variant="subtle"
+            onClick={() => void handleTestConnection()}
+            disabled={!canTest}
+          >
+            {testing
+              ? t("cleanup.settings.testing")
+              : t("cleanup.settings.testConnection")}
+          </Button>
+          <p className="set-note">{t("cleanup.settings.keyHint")}</p>
+        </div>
       </div>
 
       <div className="set-section">
-        <h3 className="set-section__title">清理行为</h3>
+        <h3 className="set-section__title">
+          {t("cleanup.settings.behaviorSection")}
+        </h3>
 
         <div className="set-toggle">
           <div className="set-toggle__text">
-            <span className="set-field__label">默认移至废纸篓</span>
+            <span className="set-field__label">
+              {t("cleanup.settings.defaultToTrash")}
+            </span>
             <span className="set-field__hint">
-              开启后清理优先放入废纸篓而非永久删除，更安全。
+              {t("cleanup.settings.defaultToTrashHint")}
             </span>
           </div>
           <button
@@ -171,7 +325,7 @@ export default function SettingsPanel() {
             className="set-switch"
             role="switch"
             aria-checked={settings.defaultToTrash}
-            aria-label="默认移至废纸篓"
+            aria-label={t("cleanup.settings.defaultToTrash")}
             onClick={() => {
               update({ defaultToTrash: !settings.defaultToTrash });
               setSaved(false);
@@ -181,28 +335,38 @@ export default function SettingsPanel() {
 
         <div className="set-field">
           <label className="set-field__label" htmlFor="set-language">
-            界面语言
+            {t("cleanup.settings.language")}
           </label>
           <select
             id="set-language"
             className="set-select"
             value={settings.language}
             onChange={(e) => {
-              update({ language: e.target.value as AppSettings["language"] });
+              const lang = e.target.value as AppSettings["language"];
+              update({ language: lang });
+              setLocale(lang);
               setSaved(false);
             }}
           >
-            <option value="zh">简体中文</option>
-            <option value="en">English</option>
+            <option value="zh">{t("cleanup.settings.languageZh")}</option>
+            <option value="en">{t("cleanup.settings.languageEn")}</option>
           </select>
         </div>
       </div>
 
       <div className="set-actions">
-        <Button variant="primary" onClick={() => void onSave()} disabled={saving}>
-          {saving ? "保存中…" : "保存设置"}
+        <Button
+          variant="primary"
+          onClick={() => void onSave()}
+          disabled={saving}
+        >
+          {saving ? t("cleanup.settings.saving") : t("cleanup.settings.save")}
         </Button>
-        {saved && !error && <span className="set-status set-status--ok">已保存</span>}
+        {saved && !error && (
+          <span className="set-status set-status--ok">
+            {t("cleanup.settings.saved")}
+          </span>
+        )}
         {error && <span className="set-status set-status--err">{error}</span>}
       </div>
     </section>

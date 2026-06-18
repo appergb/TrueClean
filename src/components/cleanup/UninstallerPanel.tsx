@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import Button from "../ui/Button";
+import { useToast } from "../ui/Toast";
 import { listApplications, uninstallApp } from "../../lib/ipc";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useI18n } from "../../i18n";
 import type { AppInfo, UninstallReport } from "../../lib/types";
 import { formatBytes, formatRelativeTime } from "../../lib/format";
 import "./cleanup.css";
@@ -12,12 +14,14 @@ function errMsg(error: unknown): string {
   if (typeof error === "object" && error && "message" in error) {
     return String((error as { message: unknown }).message);
   }
-  return "加载失败";
+  return "";
 }
 
 type Status = "idle" | "loading" | "ready" | "error";
 
 export default function UninstallerPanel() {
+  const { t } = useI18n();
+  const toast = useToast();
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [apps, setApps] = useState<AppInfo[]>([]);
@@ -56,42 +60,62 @@ export default function UninstallerPanel() {
 
   const handleUninstall = useCallback(
     async (app: AppInfo) => {
-      const dest = defaultToTrash ? "移至废纸篓" : "永久删除";
-      const ok = await confirm(
-        `将卸载「${app.name}」并「${dest}」其相关文件，预计释放 ${formatBytes(
-          app.sizeBytes,
-        )}。是否继续？`,
-        { title: "确认卸载", kind: "warning" },
-      );
+      const dest = defaultToTrash
+        ? t("cleanup.common.toTrash")
+        : t("cleanup.common.permanent");
+      let msg = t("cleanup.apps.confirmBody", {
+        name: app.name,
+        dest,
+        size: formatBytes(app.sizeBytes),
+      });
+      if (!defaultToTrash) msg += "\n\n" + t("cleanup.apps.confirmPermanent");
+      const ok = await confirm(msg, {
+        title: t("cleanup.apps.confirmTitle"),
+        kind: "warning",
+      });
       if (!ok) return;
 
       setBusyId(app.id);
       setReport(null);
+      const loadId = toast.loading(
+        t("cleanup.apps.uninstalling"),
+        app.name,
+      );
       try {
         const result = await uninstallApp(app.id, defaultToTrash);
+        toast.dismiss(loadId);
+        toast.success(
+          t("cleanup.apps.successTitle"),
+          t("cleanup.apps.successDesc", {
+            name: result.app,
+            size: formatBytes(result.freedBytes),
+          }),
+        );
         setReport(result);
         setApps((prev) => prev.filter((a) => a.id !== app.id));
       } catch (e: unknown) {
+        toast.dismiss(loadId);
+        toast.error(t("cleanup.apps.failedTitle"), errMsg(e));
         setError(errMsg(e));
         setStatus("error");
       } finally {
         setBusyId(null);
       }
     },
-    [defaultToTrash],
+    [defaultToTrash, t, toast],
   );
 
   return (
     <section className="cln">
       <header className="cln-head">
         <div className="cln-head__titles">
-          <h2 className="cln-title">应用卸载</h2>
-          <p className="cln-sub">彻底卸载应用并清除其残留文件。</p>
+          <h2 className="cln-title">{t("cleanup.apps.title")}</h2>
+          <p className="cln-sub">{t("cleanup.apps.sub")}</p>
         </div>
         <div className="cln-tools">
           <input
             className="cln-input"
-            placeholder="搜索应用…"
+            placeholder={t("cleanup.apps.searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{ width: "12rem" }}
@@ -101,7 +125,7 @@ export default function UninstallerPanel() {
             onClick={() => void load()}
             disabled={status === "loading"}
           >
-            刷新
+            {t("cleanup.apps.refresh")}
           </Button>
         </div>
       </header>
@@ -109,16 +133,21 @@ export default function UninstallerPanel() {
       {report && (
         <div className="cln-group" style={{ padding: "var(--space-4)" }}>
           <div className="cln-group__label" style={{ marginBottom: 4 }}>
-            已卸载「{report.app}」
+            {t("cleanup.apps.reportTitle", { name: report.app })}
             <span className="cln-badge cln-badge--safe">
-              释放 {formatBytes(report.freedBytes)}
+              {t("cleanup.apps.reportFreed", {
+                size: formatBytes(report.freedBytes),
+              })}
             </span>
           </div>
           <div className="cln-sub">
-            移除 {report.removedPaths.length} 项
+            {t("cleanup.apps.removedCount", { count: report.removedPaths.length })}
             {report.leftoverPaths.length > 0
-              ? ` · ${report.leftoverPaths.length} 项残留未能移除`
-              : " · 无残留"}
+              ? " · " +
+                t("cleanup.apps.leftoverCount", {
+                  count: report.leftoverPaths.length,
+                })
+              : " · " + t("cleanup.apps.noLeftover")}
           </div>
           {report.leftoverPaths.length > 0 && (
             <ul
@@ -141,16 +170,16 @@ export default function UninstallerPanel() {
       {status === "loading" && (
         <div className="cln-state">
           <div className="cln-spinner" />
-          <p className="cln-state__title">正在扫描已安装应用…</p>
+          <p className="cln-state__title">{t("cleanup.apps.loading")}</p>
         </div>
       )}
 
       {status === "error" && (
         <div className="cln-state cln-state--error">
-          <p className="cln-state__title">出错了</p>
+          <p className="cln-state__title">{t("cleanup.apps.error")}</p>
           <p className="cln-state__msg">{error}</p>
           <Button variant="subtle" onClick={() => void load()}>
-            重试
+            {t("cleanup.common.retry")}
           </Button>
         </div>
       )}
@@ -158,7 +187,7 @@ export default function UninstallerPanel() {
       {status === "ready" && filtered.length === 0 && (
         <div className="cln-state">
           <p className="cln-state__title">
-            {query ? "没有匹配的应用" : "未发现可卸载的应用"}
+            {query ? t("cleanup.apps.emptySearch") : t("cleanup.apps.empty")}
           </p>
         </div>
       )}
@@ -175,7 +204,7 @@ export default function UninstallerPanel() {
                       className="cln-card__time"
                       style={{ marginLeft: "var(--space-2)" }}
                     >
-                      v{app.version}
+                      {t("cleanup.apps.version", { version: app.version })}
                     </span>
                   )}
                 </span>
@@ -188,7 +217,9 @@ export default function UninstallerPanel() {
                   {formatBytes(app.sizeBytes)}
                 </span>
                 <span className="cln-card__time">
-                  最近使用 {formatRelativeTime(app.lastUsed)}
+                  {t("cleanup.apps.lastUsed", {
+                    time: formatRelativeTime(app.lastUsed),
+                  })}
                 </span>
               </div>
               <Button
@@ -196,7 +227,9 @@ export default function UninstallerPanel() {
                 onClick={() => void handleUninstall(app)}
                 disabled={busyId !== null}
               >
-                {busyId === app.id ? "卸载中…" : "卸载"}
+                {busyId === app.id
+                  ? t("cleanup.apps.uninstalling")
+                  : t("cleanup.apps.uninstall")}
               </Button>
             </div>
           ))}

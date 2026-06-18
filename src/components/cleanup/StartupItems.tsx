@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Button from "../ui/Button";
+import { useToast } from "../ui/Toast";
 import { listStartupItems, setStartupItem } from "../../lib/ipc";
+import { useI18n } from "../../i18n";
 import type { StartupItem } from "../../lib/types";
 import "./cleanup.css";
 
@@ -9,12 +11,14 @@ function errMsg(error: unknown): string {
   if (typeof error === "object" && error && "message" in error) {
     return String((error as { message: unknown }).message);
   }
-  return "加载失败";
+  return "";
 }
 
 type Status = "idle" | "loading" | "ready" | "error";
 
 export default function StartupItems() {
+  const { t } = useI18n();
+  const toast = useToast();
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<StartupItem[]>([]);
@@ -41,33 +45,38 @@ export default function StartupItems() {
     async (item: StartupItem) => {
       const next = !item.enabled;
       setBusyId(item.id);
-      // Optimistic update.
       setItems((prev) =>
         prev.map((it) => (it.id === item.id ? { ...it, enabled: next } : it)),
       );
       try {
         await setStartupItem(item.id, next);
+        toast.success(
+          next
+            ? t("cleanup.startup.toggleOnSuccess", { name: item.name })
+            : t("cleanup.startup.toggleOffSuccess", { name: item.name }),
+        );
       } catch (e: unknown) {
-        // Roll back on failure.
         setItems((prev) =>
           prev.map((it) =>
             it.id === item.id ? { ...it, enabled: item.enabled } : it,
           ),
         );
-        setError(errMsg(e));
+        toast.error(
+          t("cleanup.startup.toggleError", { error: errMsg(e) }),
+        );
       } finally {
         setBusyId(null);
       }
     },
-    [],
+    [t, toast],
   );
 
   return (
     <section className="cln">
       <header className="cln-head">
         <div className="cln-head__titles">
-          <h2 className="cln-title">启动项</h2>
-          <p className="cln-sub">关闭不需要的开机自启项可加快开机速度。</p>
+          <h2 className="cln-title">{t("cleanup.startup.title")}</h2>
+          <p className="cln-sub">{t("cleanup.startup.sub")}</p>
         </div>
         <div className="cln-tools">
           <Button
@@ -75,38 +84,32 @@ export default function StartupItems() {
             onClick={() => void load()}
             disabled={status === "loading"}
           >
-            刷新
+            {t("cleanup.startup.refresh")}
           </Button>
         </div>
       </header>
 
-      {error && status === "ready" && (
-        <p className="cln-sub" style={{ color: "var(--danger)" }}>
-          操作失败：{error}
-        </p>
-      )}
-
       {status === "loading" && (
         <div className="cln-state">
           <div className="cln-spinner" />
-          <p className="cln-state__title">正在读取启动项…</p>
+          <p className="cln-state__title">{t("cleanup.startup.loading")}</p>
         </div>
       )}
 
       {status === "error" && (
         <div className="cln-state cln-state--error">
-          <p className="cln-state__title">出错了</p>
+          <p className="cln-state__title">{t("cleanup.startup.error")}</p>
           <p className="cln-state__msg">{error}</p>
           <Button variant="subtle" onClick={() => void load()}>
-            重试
+            {t("cleanup.common.retry")}
           </Button>
         </div>
       )}
 
       {status === "ready" && items.length === 0 && (
         <div className="cln-state">
-          <p className="cln-state__title">没有启动项</p>
-          <p className="cln-state__msg">当前没有检测到开机自启的项目。</p>
+          <p className="cln-state__title">{t("cleanup.startup.empty")}</p>
+          <p className="cln-state__msg">{t("cleanup.startup.emptyDesc")}</p>
         </div>
       )}
 
@@ -126,7 +129,11 @@ export default function StartupItems() {
                 className="cln-switch"
                 role="switch"
                 aria-checked={item.enabled}
-                aria-label={`${item.enabled ? "停用" : "启用"} ${item.name}`}
+                aria-label={
+                  item.enabled
+                    ? t("cleanup.startup.disable") + " " + item.name
+                    : t("cleanup.startup.enable") + " " + item.name
+                }
                 disabled={busyId === item.id}
                 onClick={() => void handleToggle(item)}
               />

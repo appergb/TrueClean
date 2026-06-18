@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import Button from "../ui/Button";
+import { useToast } from "../ui/Toast";
 import { findDuplicates, cleanPaths } from "../../lib/ipc";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useI18n } from "../../i18n";
 import type { DuplicateGroup } from "../../lib/types";
 import { formatBytes, formatRelativeTime } from "../../lib/format";
 import "./cleanup.css";
@@ -14,12 +16,14 @@ function errMsg(error: unknown): string {
   if (typeof error === "object" && error && "message" in error) {
     return String((error as { message: unknown }).message);
   }
-  return "查找失败";
+  return "";
 }
 
 type Status = "idle" | "loading" | "ready" | "error";
 
 export default function DuplicatesPanel() {
+  const { t } = useI18n();
+  const toast = useToast();
   const [path, setPath] = useState("");
   const [minSizeMb, setMinSizeMb] = useState(1);
   const [status, setStatus] = useState<Status>("idle");
@@ -43,7 +47,7 @@ export default function DuplicatesPanel() {
 
   const runSearch = useCallback(async () => {
     if (!path.trim()) {
-      setError("请先选择要搜索的目录");
+      setError(t("cleanup.dup.dirRequired"));
       setStatus("error");
       return;
     }
@@ -52,7 +56,6 @@ export default function DuplicatesPanel() {
     try {
       const result = await findDuplicates(path, Math.max(0, minSizeMb) * MB);
       setGroups(result);
-      // Pre-select all but the first file in every group.
       const preset = new Set<string>();
       for (const g of result) {
         g.files.slice(1).forEach((f) => preset.add(f.path));
@@ -63,13 +66,27 @@ export default function DuplicatesPanel() {
       setError(errMsg(e));
       setStatus("error");
     }
-  }, [path, minSizeMb]);
+  }, [path, minSizeMb, t]);
 
   const toggle = useCallback((p: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(p)) next.delete(p);
       else next.add(p);
+      return next;
+    });
+  }, []);
+
+  // Group checkbox: checked = select all but first (keep one); unchecked = clear group.
+  const toggleGroup = useCallback((g: DuplicateGroup, checked: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const targets = g.files.slice(1);
+      if (checked) {
+        targets.forEach((f) => next.add(f.path));
+      } else {
+        g.files.forEach((f) => next.delete(f.path));
+      }
       return next;
     });
   }, []);
@@ -95,18 +112,37 @@ export default function DuplicatesPanel() {
 
   const handleDelete = useCallback(async () => {
     if (selectedPaths.length === 0) return;
-    const dest = defaultToTrash ? "移至废纸篓" : "永久删除";
-    const ok = await confirm(
-      `将对 ${selectedPaths.length} 个重复文件执行「${dest}」，预计释放 ${formatBytes(
-        selectedBytes,
-      )}。每组至少应保留一个副本。`,
-      { title: "确认删除重复项", kind: "warning" },
-    );
+    const dest = defaultToTrash
+      ? t("cleanup.common.toTrash")
+      : t("cleanup.common.permanent");
+    let msg = t("cleanup.dup.confirmBody", {
+      count: selectedPaths.length,
+      dest,
+      size: formatBytes(selectedBytes),
+    });
+    if (!defaultToTrash) msg += "\n\n" + t("cleanup.dup.confirmPermanent");
+    const ok = await confirm(msg, {
+      title: t("cleanup.dup.confirmTitle"),
+      kind: "warning",
+    });
     if (!ok) return;
 
     setCleaning(true);
+    const loadId = toast.loading(t("cleanup.dup.deleting"));
     try {
       const report = await cleanPaths(selectedPaths, defaultToTrash);
+      toast.dismiss(loadId);
+      const failedNote =
+        report.failed.length > 0
+          ? " · " + t("cleanup.junk.failedNote", { count: report.failed.length })
+          : "";
+      toast.success(
+        t("cleanup.dup.successTitle"),
+        t("cleanup.dup.successDesc", {
+          count: report.removedCount,
+          size: formatBytes(report.freedBytes),
+        }) + failedNote,
+      );
       const removed = new Set(selectedPaths);
       setGroups((prev) =>
         prev
@@ -117,50 +153,45 @@ export default function DuplicatesPanel() {
           .filter((g) => g.files.length > 1),
       );
       setSelected(new Set());
-      const note =
-        report.failed.length > 0 ? `，${report.failed.length} 项失败` : "";
-      await confirm(
-        `已删除 ${report.removedCount} 项，释放 ${formatBytes(
-          report.freedBytes,
-        )}${note}。`,
-        { title: "删除完成", kind: "info" },
-      );
+      if (defaultToTrash) {
+        toast.info(t("cleanup.junk.undoHint"), undefined, 6000);
+      }
     } catch (e: unknown) {
+      toast.dismiss(loadId);
+      toast.error(t("cleanup.dup.error"), errMsg(e));
       setError(errMsg(e));
       setStatus("error");
     } finally {
       setCleaning(false);
     }
-  }, [selectedPaths, selectedBytes, defaultToTrash]);
+  }, [selectedPaths, selectedBytes, defaultToTrash, t, toast]);
 
   return (
     <section className="cln">
       <header className="cln-head">
         <div className="cln-head__titles">
-          <h2 className="cln-title">重复文件</h2>
-          <p className="cln-sub">
-            按内容哈希查找完全相同的文件，每组默认保留第一个。
-          </p>
+          <h2 className="cln-title">{t("cleanup.dup.title")}</h2>
+          <p className="cln-sub">{t("cleanup.dup.sub")}</p>
         </div>
       </header>
 
       <div className="cln-tools">
         <div className="cln-field">
-          <span className="cln-field__label">目录</span>
+          <span className="cln-field__label">{t("cleanup.dup.dir")}</span>
           <div className="cln-pathrow">
             <input
               className="cln-input cln-input--path"
               value={path}
-              placeholder="选择要扫描的目录"
+              placeholder={t("cleanup.dup.dirPlaceholder")}
               onChange={(e) => setPath(e.target.value)}
             />
             <Button variant="subtle" onClick={() => void pickDir()}>
-              浏览…
+              {t("cleanup.dup.browse")}
             </Button>
           </div>
         </div>
         <div className="cln-field">
-          <span className="cln-field__label">最小大小 (MB)</span>
+          <span className="cln-field__label">{t("cleanup.dup.minSize")}</span>
           <input
             type="number"
             min={0}
@@ -176,7 +207,7 @@ export default function DuplicatesPanel() {
             onClick={() => void runSearch()}
             disabled={status === "loading"}
           >
-            查找
+            {t("cleanup.dup.search")}
           </Button>
         </div>
       </div>
@@ -184,79 +215,111 @@ export default function DuplicatesPanel() {
       {status === "loading" && (
         <div className="cln-state">
           <div className="cln-spinner" />
-          <p className="cln-state__title">正在比对文件内容…</p>
+          <p className="cln-state__title">{t("cleanup.dup.searching")}</p>
         </div>
       )}
 
       {status === "error" && (
         <div className="cln-state cln-state--error">
-          <p className="cln-state__title">出错了</p>
+          <p className="cln-state__title">{t("cleanup.dup.error")}</p>
           <p className="cln-state__msg">{error}</p>
+          <Button variant="subtle" onClick={() => setStatus("idle")}>
+            {t("cleanup.common.retry")}
+          </Button>
         </div>
       )}
 
       {status === "idle" && (
         <div className="cln-state">
-          <p className="cln-state__title">选择目录开始查重</p>
-          <p className="cln-state__msg">
-            较小的最小大小会发现更多重复，但扫描更慢。
-          </p>
+          <p className="cln-state__title">{t("cleanup.dup.idle")}</p>
+          <p className="cln-state__msg">{t("cleanup.dup.idleDesc")}</p>
         </div>
       )}
 
       {status === "ready" && groups.length === 0 && (
         <div className="cln-state">
-          <p className="cln-state__title">未发现重复文件</p>
-          <p className="cln-state__msg">该目录下没有体积达标的重复内容。</p>
+          <p className="cln-state__title">{t("cleanup.dup.noResult")}</p>
+          <p className="cln-state__msg">{t("cleanup.dup.noResultDesc")}</p>
         </div>
       )}
 
       {status === "ready" && groups.length > 0 && (
         <>
           <div className="cln-list">
-            {groups.map((g) => (
-              <div className="cln-dup" key={g.hash}>
-                <div className="cln-dup__head">
-                  <div>
-                    <div className="cln-dup__title">
-                      {g.files.length} 个相同文件 · 各 {formatBytes(g.sizeBytes)}
-                    </div>
-                    <div className="cln-dup__hash">{g.hash.slice(0, 16)}…</div>
-                  </div>
-                  <span className="cln-dup__waste">
-                    可回收 {formatBytes(g.wastedBytes)}
-                  </span>
-                </div>
-                <div className="cln-group__items">
-                  {g.files.map((f, idx) => (
-                    <label className="cln-row" key={f.path}>
+            {groups.map((g) => {
+              const deletable = g.files.slice(1);
+              const selCount = deletable.filter((f) =>
+                selected.has(f.path),
+              ).length;
+              const groupChecked =
+                deletable.length > 0 && selCount === deletable.length;
+              const groupSome = selCount > 0 && !groupChecked;
+              return (
+                <div className="cln-dup" key={g.hash}>
+                  <div className="cln-dup__head">
+                    <div className="cln-dup__headleft">
                       <input
                         type="checkbox"
                         className="cln-check"
-                        checked={selected.has(f.path)}
-                        onChange={() => toggle(f.path)}
+                        checked={groupChecked}
+                        ref={(el) => {
+                          if (el) el.indeterminate = groupSome;
+                        }}
+                        onChange={(e) => toggleGroup(g, e.target.checked)}
+                        aria-label={t("cleanup.dup.selectGroup")}
                       />
-                      <span className="cln-row__path" title={f.path}>
-                        {f.path}
-                      </span>
-                      {idx === 0 && !selected.has(f.path) && (
-                        <span className="cln-badge cln-badge--keep">保留</span>
-                      )}
-                      <span className="cln-card__time">
-                        {formatRelativeTime(f.modified)}
-                      </span>
-                    </label>
-                  ))}
+                      <div>
+                        <div className="cln-dup__title">
+                          {t("cleanup.dup.filesCount", {
+                            count: g.files.length,
+                            size: formatBytes(g.sizeBytes),
+                          })}
+                        </div>
+                        <div className="cln-dup__hash">{g.hash.slice(0, 16)}…</div>
+                      </div>
+                    </div>
+                    <span className="cln-dup__waste">
+                      {t("cleanup.dup.recyclable", {
+                        size: formatBytes(g.wastedBytes),
+                      })}
+                    </span>
+                  </div>
+                  <div className="cln-group__items">
+                    {g.files.map((f, idx) => (
+                      <label className="cln-row" key={f.path}>
+                        <input
+                          type="checkbox"
+                          className="cln-check"
+                          checked={selected.has(f.path)}
+                          onChange={() => toggle(f.path)}
+                        />
+                        <span className="cln-row__path" title={f.path}>
+                          {f.path}
+                        </span>
+                        {idx === 0 && !selected.has(f.path) && (
+                          <span className="cln-badge cln-badge--keep">
+                            {t("cleanup.dup.keep")}
+                          </span>
+                        )}
+                        <span className="cln-card__time">
+                          {formatRelativeTime(f.modified)}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="cln-bar">
             <div className="cln-bar__info">
               <span className="cln-bar__count">
-                {groups.length} 组 · 可回收合计 {formatBytes(totalWasted)} · 已选{" "}
-                {selectedPaths.length} 项
+                {t("cleanup.dup.summary", {
+                  groups: groups.length,
+                  total: formatBytes(totalWasted),
+                  selected: selectedPaths.length,
+                })}
               </span>
               <span className="cln-bar__size">{formatBytes(selectedBytes)}</span>
             </div>
@@ -266,7 +329,9 @@ export default function DuplicatesPanel() {
                 onClick={() => void handleDelete()}
                 disabled={selectedPaths.length === 0 || cleaning}
               >
-                {cleaning ? "删除中…" : "删除所选"}
+                {cleaning
+                  ? t("cleanup.dup.deleting")
+                  : t("cleanup.dup.deleteSelected")}
               </Button>
             </div>
           </div>

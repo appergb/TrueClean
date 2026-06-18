@@ -1,25 +1,30 @@
 import { useCallback, useMemo, useState } from "react";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import Button from "../ui/Button";
+import { useToast } from "../ui/Toast";
 import { findLargeOldFiles, cleanPaths } from "../../lib/ipc";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useI18n } from "../../i18n";
 import type { FileEntry } from "../../lib/types";
 import { formatBytes, formatRelativeTime } from "../../lib/format";
 import "./cleanup.css";
 
 const MB = 1024 * 1024;
+const DAY_MS = 86_400_000;
 
 function errMsg(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "object" && error && "message" in error) {
     return String((error as { message: unknown }).message);
   }
-  return "查找失败";
+  return "";
 }
 
 type Status = "idle" | "loading" | "ready" | "error";
 
 export default function LargeOldFiles() {
+  const { t } = useI18n();
+  const toast = useToast();
   const [path, setPath] = useState("");
   const [minSizeMb, setMinSizeMb] = useState(100);
   const [olderThanDays, setOlderThanDays] = useState(180);
@@ -44,7 +49,7 @@ export default function LargeOldFiles() {
 
   const runSearch = useCallback(async () => {
     if (!path.trim()) {
-      setError("请先选择要搜索的目录");
+      setError(t("cleanup.large.dirRequired"));
       setStatus("error");
       return;
     }
@@ -63,7 +68,7 @@ export default function LargeOldFiles() {
       setError(errMsg(e));
       setStatus("error");
     }
-  }, [path, minSizeMb, olderThanDays]);
+  }, [path, minSizeMb, olderThanDays, t]);
 
   const toggle = useCallback((p: string) => {
     setSelected((prev) => {
@@ -88,62 +93,78 @@ export default function LargeOldFiles() {
 
   const handleDelete = useCallback(async () => {
     if (selectedPaths.length === 0) return;
-    const dest = defaultToTrash ? "移至废纸篓" : "永久删除";
-    const ok = await confirm(
-      `将对 ${selectedPaths.length} 个文件执行「${dest}」，预计释放 ${formatBytes(
-        selectedBytes,
-      )}。删除前请确认这些文件不再需要。`,
-      { title: "确认删除", kind: "warning" },
-    );
+    const dest = defaultToTrash
+      ? t("cleanup.common.toTrash")
+      : t("cleanup.common.permanent");
+    let msg = t("cleanup.large.confirmBody", {
+      count: selectedPaths.length,
+      dest,
+      size: formatBytes(selectedBytes),
+    });
+    if (!defaultToTrash) msg += "\n\n" + t("cleanup.large.confirmPermanent");
+    const ok = await confirm(msg, {
+      title: t("cleanup.large.confirmTitle"),
+      kind: "warning",
+    });
     if (!ok) return;
 
     setCleaning(true);
+    const loadId = toast.loading(t("cleanup.large.deleting"));
     try {
       const report = await cleanPaths(selectedPaths, defaultToTrash);
+      toast.dismiss(loadId);
+      const failedNote =
+        report.failed.length > 0
+          ? " · " + t("cleanup.junk.failedNote", { count: report.failed.length })
+          : "";
+      toast.success(
+        t("cleanup.large.successTitle"),
+        t("cleanup.large.successDesc", {
+          count: report.removedCount,
+          size: formatBytes(report.freedBytes),
+        }) + failedNote,
+      );
       setFiles((prev) => prev.filter((f) => !selected.has(f.path)));
       setSelected(new Set());
-      const note =
-        report.failed.length > 0 ? `，${report.failed.length} 项失败` : "";
-      await confirm(
-        `已删除 ${report.removedCount} 项，释放 ${formatBytes(
-          report.freedBytes,
-        )}${note}。`,
-        { title: "删除完成", kind: "info" },
-      );
+      if (defaultToTrash) {
+        toast.info(t("cleanup.junk.undoHint"), undefined, 6000);
+      }
     } catch (e: unknown) {
+      toast.dismiss(loadId);
+      toast.error(t("cleanup.large.error"), errMsg(e));
       setError(errMsg(e));
       setStatus("error");
     } finally {
       setCleaning(false);
     }
-  }, [selectedPaths, selectedBytes, defaultToTrash, selected]);
+  }, [selectedPaths, selectedBytes, defaultToTrash, selected, t, toast]);
 
   return (
     <section className="cln">
       <header className="cln-head">
         <div className="cln-head__titles">
-          <h2 className="cln-title">大文件 & 旧文件</h2>
-          <p className="cln-sub">按最小体积与未修改天数查找占空间的文件。</p>
+          <h2 className="cln-title">{t("cleanup.large.title")}</h2>
+          <p className="cln-sub">{t("cleanup.large.sub")}</p>
         </div>
       </header>
 
       <div className="cln-tools">
         <div className="cln-field">
-          <span className="cln-field__label">目录</span>
+          <span className="cln-field__label">{t("cleanup.large.dir")}</span>
           <div className="cln-pathrow">
             <input
               className="cln-input cln-input--path"
               value={path}
-              placeholder="选择要扫描的目录"
+              placeholder={t("cleanup.large.dirPlaceholder")}
               onChange={(e) => setPath(e.target.value)}
             />
             <Button variant="subtle" onClick={() => void pickDir()}>
-              浏览…
+              {t("cleanup.large.browse")}
             </Button>
           </div>
         </div>
         <div className="cln-field">
-          <span className="cln-field__label">最小大小 (MB)</span>
+          <span className="cln-field__label">{t("cleanup.large.minSize")}</span>
           <input
             type="number"
             min={0}
@@ -153,7 +174,7 @@ export default function LargeOldFiles() {
           />
         </div>
         <div className="cln-field">
-          <span className="cln-field__label">早于 (天)</span>
+          <span className="cln-field__label">{t("cleanup.large.olderThan")}</span>
           <input
             type="number"
             min={0}
@@ -169,7 +190,7 @@ export default function LargeOldFiles() {
             onClick={() => void runSearch()}
             disabled={status === "loading"}
           >
-            查找
+            {t("cleanup.large.search")}
           </Button>
         </div>
       </div>
@@ -177,66 +198,80 @@ export default function LargeOldFiles() {
       {status === "loading" && (
         <div className="cln-state">
           <div className="cln-spinner" />
-          <p className="cln-state__title">正在查找文件…</p>
+          <p className="cln-state__title">{t("cleanup.large.searching")}</p>
         </div>
       )}
 
       {status === "error" && (
         <div className="cln-state cln-state--error">
-          <p className="cln-state__title">出错了</p>
+          <p className="cln-state__title">{t("cleanup.large.error")}</p>
           <p className="cln-state__msg">{error}</p>
+          <Button variant="subtle" onClick={() => setStatus("idle")}>
+            {t("cleanup.common.retry")}
+          </Button>
         </div>
       )}
 
       {status === "idle" && (
         <div className="cln-state">
-          <p className="cln-state__title">选择目录并设置条件</p>
-          <p className="cln-state__msg">
-            设定最小大小与未修改天数，点击「查找」开始。
-          </p>
+          <p className="cln-state__title">{t("cleanup.large.idle")}</p>
+          <p className="cln-state__msg">{t("cleanup.large.idleDesc")}</p>
         </div>
       )}
 
       {status === "ready" && files.length === 0 && (
         <div className="cln-state">
-          <p className="cln-state__title">没有匹配的文件</p>
-          <p className="cln-state__msg">尝试降低最小大小或缩短天数阈值。</p>
+          <p className="cln-state__title">{t("cleanup.large.noResult")}</p>
+          <p className="cln-state__msg">{t("cleanup.large.noResultDesc")}</p>
         </div>
       )}
 
       {status === "ready" && files.length > 0 && (
         <>
           <div className="cln-list">
-            {files.map((f) => (
-              <label className="cln-card" key={f.path}>
-                <input
-                  type="checkbox"
-                  className="cln-check"
-                  checked={selected.has(f.path)}
-                  onChange={() => toggle(f.path)}
-                />
-                <div className="cln-card__main">
-                  <span className="cln-card__name">{f.name}</span>
-                  <span className="cln-card__path" title={f.path}>
-                    {f.path}
-                  </span>
-                </div>
-                <div className="cln-card__aside">
-                  <span className="cln-card__size">
-                    {formatBytes(f.sizeBytes)}
-                  </span>
-                  <span className="cln-card__time">
-                    {formatRelativeTime(f.modified)}
-                  </span>
-                </div>
-              </label>
-            ))}
+            {files.map((f) => {
+              const isOld =
+                f.modified != null &&
+                Date.now() - f.modified * 1000 >= olderThanDays * DAY_MS;
+              return (
+                <label className="cln-card" key={f.path}>
+                  <input
+                    type="checkbox"
+                    className="cln-check"
+                    checked={selected.has(f.path)}
+                    onChange={() => toggle(f.path)}
+                  />
+                  <div className="cln-card__main">
+                    <span className="cln-card__name">{f.name}</span>
+                    <span className="cln-card__path" title={f.path}>
+                      {f.path}
+                    </span>
+                  </div>
+                  <div className="cln-card__aside">
+                    {isOld && (
+                      <span className="cln-badge cln-badge--review">
+                        {t("cleanup.large.daysOld", { days: olderThanDays })}
+                      </span>
+                    )}
+                    <span className="cln-card__size">
+                      {formatBytes(f.sizeBytes)}
+                    </span>
+                    <span className="cln-card__time">
+                      {formatRelativeTime(f.modified)}
+                    </span>
+                  </div>
+                </label>
+              );
+            })}
           </div>
 
           <div className="cln-bar">
             <div className="cln-bar__info">
               <span className="cln-bar__count">
-                共 {files.length} 个 · 已选 {selectedPaths.length} 个
+                {t("cleanup.large.totalSelected", {
+                  total: files.length,
+                  selected: selectedPaths.length,
+                })}
               </span>
               <span className="cln-bar__size">{formatBytes(selectedBytes)}</span>
             </div>
@@ -246,7 +281,9 @@ export default function LargeOldFiles() {
                 onClick={() => void handleDelete()}
                 disabled={selectedPaths.length === 0 || cleaning}
               >
-                {cleaning ? "删除中…" : "删除所选"}
+                {cleaning
+                  ? t("cleanup.large.deleting")
+                  : t("cleanup.large.deleteSelected")}
               </Button>
             </div>
           </div>

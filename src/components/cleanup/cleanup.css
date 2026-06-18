@@ -531,3 +531,15 @@
   color: var(--warn);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- Duplicate group header (checkbox + title) -------------------------- */
+.cln-dup__headleft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.cln-dup__headleft .cln-check {
+  flex: none;
+}
