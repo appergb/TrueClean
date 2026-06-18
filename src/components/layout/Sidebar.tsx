@@ -13,7 +13,6 @@ export type ViewId =
 
 interface NavItem {
   id: ViewId;
-  labelKey: string;
   icon: ReactNode;
 }
 
@@ -37,7 +36,6 @@ const ico = (paths: ReactNode) => (
 const NAV: NavItem[] = [
   {
     id: "overview",
-    labelKey: "shell.nav.overview",
     icon: ico(
       <>
         <rect x="3" y="3" width="7" height="9" rx="1.5" />
@@ -49,7 +47,6 @@ const NAV: NavItem[] = [
   },
   {
     id: "scan",
-    labelKey: "shell.nav.scan",
     icon: ico(
       <>
         <circle cx="11" cy="11" r="7" />
@@ -59,7 +56,6 @@ const NAV: NavItem[] = [
   },
   {
     id: "junk",
-    labelKey: "shell.nav.junk",
     icon: ico(
       <>
         <path d="M3 6h18" />
@@ -70,7 +66,6 @@ const NAV: NavItem[] = [
   },
   {
     id: "large",
-    labelKey: "shell.nav.large",
     icon: ico(
       <>
         <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -80,7 +75,6 @@ const NAV: NavItem[] = [
   },
   {
     id: "duplicates",
-    labelKey: "shell.nav.duplicates",
     icon: ico(
       <>
         <rect x="9" y="9" width="11" height="11" rx="2" />
@@ -90,7 +84,6 @@ const NAV: NavItem[] = [
   },
   {
     id: "apps",
-    labelKey: "shell.nav.apps",
     icon: ico(
       <>
         <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -102,7 +95,6 @@ const NAV: NavItem[] = [
   },
   {
     id: "startup",
-    labelKey: "shell.nav.startup",
     icon: ico(
       <>
         <path d="M12 3v9" />
@@ -112,7 +104,6 @@ const NAV: NavItem[] = [
   },
   {
     id: "settings",
-    labelKey: "shell.nav.settings",
     icon: ico(
       <>
         <circle cx="12" cy="12" r="3" />
@@ -162,7 +153,6 @@ export function Sidebar({ current, onNavigate }: SidebarProps) {
       <nav className="tc-sidebar__nav" aria-label={t("shell.nav.label")}>
         {NAV.map((item) => {
           const active = item.id === current;
-          const label = t(item.labelKey);
           return (
             <button
               key={item.id}
@@ -172,7 +162,9 @@ export function Sidebar({ current, onNavigate }: SidebarProps) {
               onClick={() => onNavigate(item.id)}
             >
               <span className="tc-nav-item__icon">{item.icon}</span>
-              <span className="tc-nav-item__label">{label}</span>
+              <span className="tc-nav-item__label">
+                {t(`shell.nav.${item.id}`)}
+              </span>
               {active && (
                 <span className="tc-nav-item__marker" aria-hidden="true" />
               )}
@@ -187,10 +179,5 @@ export function Sidebar({ current, onNavigate }: SidebarProps) {
     </aside>
   );
 }
-
-/** Map each view to its i18n key — callers resolve via `t(key)`. */
-export const NAV_LABEL_KEYS: Record<ViewId, string> = Object.fromEntries(
-  NAV.map((n) => [n.id, n.labelKey]),
-) as Record<ViewId, string>;
 
 export default Sidebar;

@@ -1,11 +1,11 @@
 import { IconButton } from "../ui/IconButton";
 import { Button } from "../ui/Button";
 import { Segmented } from "../ui/Segmented";
-import type { ViewId } from "./Sidebar";
-import { NAV_LABEL_KEYS } from "./Sidebar";
-import type { Theme } from "../../hooks/useTheme";
+import { CrashTest } from "../ui/ErrorBoundary";
 import { useI18n } from "../../i18n";
 import type { Locale } from "../../i18n";
+import type { ViewId } from "./Sidebar";
+import type { Theme } from "../../hooks/useTheme";
 
 interface TopBarProps {
   current: ViewId;
@@ -34,6 +34,11 @@ const SparkIcon = (
   </svg>
 );
 
+const LANG_OPTIONS: { value: Locale; label: string }[] = [
+  { value: "zh", label: "中" },
+  { value: "en", label: "EN" },
+];
+
 export function TopBar({
   current,
   theme,
@@ -49,22 +54,24 @@ export function TopBar({
         <span className="tc-topbar__sep" aria-hidden="true">
           /
         </span>
-        <h1 className="tc-topbar__title">{t(NAV_LABEL_KEYS[current])}</h1>
+        <h1 className="tc-topbar__title">{t(`shell.nav.${current}`)}</h1>
       </div>
 
       <div className="tc-topbar__actions">
-        <Segmented<Locale>
-          size="sm"
+        <CrashTest />
+        <Segmented
           ariaLabel={t("shell.topbar.language")}
+          size="sm"
+          options={LANG_OPTIONS}
           value={locale}
           onChange={setLocale}
-          options={[
-            { value: "zh", label: t("shell.topbar.langZh") },
-            { value: "en", label: t("shell.topbar.langEn") },
-          ]}
         />
         <IconButton
-          label={theme === "dark" ? t("shell.topbar.themeToLight") : t("shell.topbar.themeToDark")}
+          label={
+            theme === "dark"
+              ? t("shell.topbar.themeToLight")
+              : t("shell.topbar.themeToDark")
+          }
           icon={theme === "dark" ? SunIcon : MoonIcon}
           onClick={onToggleTheme}
         />

@@ -1,112 +1,80 @@
-// Global error boundary — catches render errors anywhere in the subtree and
-// shows a friendly Chinese/English fallback with a retry action.
-//
-// Usage: wrap the app root. Pass a `resetKey` that changes on navigation so a
-// route switch recovers from a stale error state automatically.
-//
-//   <ErrorBoundary resetKey={view}>
-//     <App />
-//   </ErrorBoundary>
+// Global React error boundary — catches render-time errors anywhere in the
+// subtree and shows a friendly Chinese fallback with retry / reload. Mount once
+// near the app root (above the routed views). Uses the standalone `t()` so it
+// keeps working even if the broken subtree included i18n consumers.
 
-import { Component } from "react";
-import type { ErrorInfo, ReactNode } from "react";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 import { t } from "../../i18n";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  /** When this value changes, the boundary resets to its non-error state. */
-  resetKey?: string | number;
+  /** Optional custom fallback. Receives the caught error + a retry callback. */
+  fallback?: (error: Error, retry: () => void) => ReactNode;
 }
 
 interface ErrorBoundaryState {
-  hasError: boolean;
-  message: string;
+  error: Error | null;
 }
 
-export class ErrorBoundary extends Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
-  state: ErrorBoundaryState = { hasError: false, message: "" };
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { error: null };
 
-  static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
-    const message =
-      error instanceof Error
-        ? error.message
-        : typeof error === "string"
-          ? error
-          : String(error);
-    return { hasError: true, message };
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { error };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Surface to the console for debugging — this is dev-only diagnostics,
-    // not a stray log: it mirrors React's recommended boundary behaviour.
-    // eslint-disable-next-line no-console
-    console.error("[ErrorBoundary]", error, info.componentStack);
-  }
-
-  componentDidUpdate(prev: ErrorBoundaryProps): void {
-    // Reset when the resetKey changes (e.g. user navigated away).
-    if (this.state.hasError && prev.resetKey !== this.props.resetKey) {
-      this.setState({ hasError: false, message: "" });
+    // Surface to the console only in dev — never log in production builds.
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.error("[ErrorBoundary]", error, info.componentStack);
     }
   }
 
-  private handleRetry = (): void => {
-    this.setState({ hasError: false, message: "" });
+  retry = (): void => {
+    this.setState({ error: null });
   };
 
-  private handleRefresh = (): void => {
+  reload = (): void => {
     if (typeof window !== "undefined") window.location.reload();
   };
 
   render(): ReactNode {
-    if (!this.state.hasError) return this.props.children;
+    const { error } = this.state;
+    if (!error) return this.props.children;
+    if (this.props.fallback) return this.props.fallback(error, this.retry);
 
     return (
-      <div className="tc-error-fallback" role="alert" aria-live="assertive">
-        <div className="tc-error-fallback__icon" aria-hidden="true">
-          <svg
-            viewBox="0 0 24 24"
-            width="40"
-            height="40"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+      <div className="tc-error-boundary" role="alert">
+        <div className="tc-error-boundary__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 3 2 21h20L12 3Z" />
-            <path d="M12 10v5" />
-            <path d="M12 18h.01" />
+            <path d="M12 10v5M12 18v.5" />
           </svg>
         </div>
-        <h2 className="tc-error-fallback__title">
+        <h2 className="tc-error-boundary__title">
           {t("shell.errorBoundary.title")}
         </h2>
-        <p className="tc-error-fallback__desc">
+        <p className="tc-error-boundary__desc">
           {t("shell.errorBoundary.desc")}
         </p>
-        {this.state.message && (
-          <pre className="tc-error-fallback__detail mono" aria-hidden="true">
-            {this.state.message}
-          </pre>
+        {import.meta.env.DEV && (
+          <pre className="tc-error-boundary__detail">{String(error.message)}</pre>
         )}
-        <div className="tc-error-fallback__actions">
+        <div className="tc-error-boundary__actions">
           <button
             type="button"
             className="tc-btn tc-btn--primary tc-btn--md"
-            onClick={this.handleRetry}
+            onClick={this.retry}
           >
-            <span className="tc-btn__label">{t("shell.errorBoundary.retry")}</span>
+            {t("shell.errorBoundary.retry")}
           </button>
           <button
             type="button"
             className="tc-btn tc-btn--subtle tc-btn--md"
-            onClick={this.handleRefresh}
+            onClick={this.reload}
           >
-            <span className="tc-btn__label">{t("shell.errorBoundary.refresh")}</span>
+            {t("shell.errorBoundary.reload")}
           </button>
         </div>
       </div>
@@ -115,3 +83,27 @@ export class ErrorBoundary extends Component<
 }
 
 export default ErrorBoundary;
+
+/**
+ * Dev-only crash trigger — renders a button that throws on click, so the
+ * ErrorBoundary fallback can be verified manually. Stripped from production
+ * builds via `import.meta.env.DEV`.
+ */
+export function CrashTest() {
+  if (!import.meta.env.DEV) return null;
+  return (
+    <button
+      type="button"
+      className="tc-crashtest"
+      aria-label="崩溃测试（开发）"
+      title="崩溃测试（开发）"
+      onClick={() => {
+        throw new Error("CrashTest: intentional throw to verify ErrorBoundary");
+      }}
+    >
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" />
+      </svg>
+    </button>
+  );
+}

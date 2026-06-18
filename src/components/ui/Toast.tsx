@@ -1,132 +1,117 @@
-// Toast notification system — container + hook.
-//
-// Render <ToastContainer /> once at the app root. Use `useToast()` anywhere
-// below to fire notifications:
-//
-//   const toast = useToast();
-//   toast.success("已清理 1.2 GB");
-//   const id = toast.loading("扫描中…");
-//   toast.update(id, { type: "success", message: "完成" });
-//
-// The container is an aria-live region so screen readers announce new toasts.
+// Toast viewport + useToast hook. Mount <ToastViewport/> once near the app root;
+// any component can then call useToast().success/error/loading/info to push
+// notifications. Loading toasts are sticky — update them to success/error or
+// dismiss explicitly.
 
-import { useCallback } from "react";
+import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { useToastStore } from "./toastStore";
-import type { ToastInput, ToastType } from "./toastStore";
-import { t } from "../../i18n";
+import { useToastStore, type ToastItem, type ToastKind } from "./toastStore";
 
-interface ToastHookResult {
-  success: (input: string | ToastInput) => string;
-  error: (input: string | ToastInput) => string;
-  info: (input: string | ToastInput) => string;
-  loading: (input: string | ToastInput) => string;
-  update: (id: string, patch: Partial<Omit<ToastInput, "message"> & { type: ToastType; message: string }>) => void;
+interface ToastApi {
+  success: (title: string, description?: string, duration?: number) => string;
+  error: (title: string, description?: string, duration?: number) => string;
+  loading: (title: string, description?: string) => string;
+  info: (title: string, description?: string, duration?: number) => string;
   dismiss: (id: string) => void;
+  update: (
+    id: string,
+    patch: Partial<Omit<ToastItem, "id">>,
+  ) => void;
 }
 
-function normalize(input: string | ToastInput): ToastInput {
-  return typeof input === "string" ? { message: input } : input;
-}
-
-/**
- * Fire toasts from any component. Returns stable callback methods.
- * Strings are accepted directly for convenience: `toast.success("done")`.
- */
-export function useToast(): ToastHookResult {
+/** Convenience wrapper around the toast store. Safe to call from any component. */
+export function useToast(): ToastApi {
   const push = useToastStore((s) => s.push);
+  const dismiss = useToastStore((s) => s.dismiss);
   const update = useToastStore((s) => s.update);
-  const dismiss = useToastStore((s) => s.dismiss);
-
-  const success = useCallback((i: string | ToastInput) => push("success", normalize(i)), [push]);
-  const error = useCallback((i: string | ToastInput) => push("error", normalize(i)), [push]);
-  const info = useCallback((i: string | ToastInput) => push("info", normalize(i)), [push]);
-  const loading = useCallback((i: string | ToastInput) => push("loading", normalize(i)), [push]);
-
-  return { success, error, info, loading, update, dismiss };
-}
-
-// ---- icons per type ---------------------------------------------------------
-
-function ToastIcon({ type }: { type: ToastType }): ReactNode {
-  const common = {
-    viewBox: "0 0 24 24",
-    width: "18",
-    height: "18",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "2",
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
+  return {
+    success: (title, description, duration) =>
+      push({ kind: "success", title, description, duration }),
+    error: (title, description, duration) =>
+      push({ kind: "error", title, description, duration }),
+    loading: (title, description) =>
+      push({ kind: "loading", title, description }),
+    info: (title, description, duration) =>
+      push({ kind: "info", title, description, duration }),
+    dismiss,
+    update,
   };
-  switch (type) {
-    case "success":
-      return (
-        <svg {...common}>
-          <path d="M20 6 9 17l-5-5" />
-        </svg>
-      );
-    case "error":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="9" />
-          <path d="M15 9l-6 6M9 9l6 6" />
-        </svg>
-      );
-    case "loading":
-      return <span className="tc-toast__spinner" aria-hidden="true" />;
-    case "info":
-    default:
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 8h.01M11 12h1v4h1" />
-        </svg>
-      );
-  }
 }
 
-// ---- container --------------------------------------------------------------
+const ICONS: Record<ToastKind, ReactNode> = {
+  success: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m5 12 4.5 4.5L19 7" />
+    </svg>
+  ),
+  error: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  ),
+  info: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 7.5v.5" />
+    </svg>
+  ),
+  loading: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 3a9 9 0 1 0 9 9" />
+    </svg>
+  ),
+};
 
-export function ToastContainer(): ReactNode {
-  const toasts = useToastStore((s) => s.toasts);
+function ToastCard({ toast }: { toast: ToastItem }) {
   const dismiss = useToastStore((s) => s.dismiss);
 
+  useEffect(() => {
+    if (toast.duration <= 0) return;
+    const timer = window.setTimeout(() => dismiss(toast.id), toast.duration);
+    return () => window.clearTimeout(timer);
+  }, [toast.id, toast.duration, dismiss]);
+
+  const isAlert = toast.kind === "error";
   return (
     <div
-      className="tc-toast-region"
-      role="region"
-      aria-label="通知"
-      aria-live="polite"
+      className={`tc-toast tc-toast--${toast.kind}`}
+      role={isAlert ? "alert" : "status"}
+      aria-live={isAlert ? "assertive" : "polite"}
     >
-      {toasts.map((item) => (
-        <div
-          key={item.id}
-          className={`tc-toast tc-toast--${item.type}`}
-          role={item.type === "error" ? "alert" : "status"}
-        >
-          <span className="tc-toast__icon" aria-hidden="true">
-            <ToastIcon type={item.type} />
-          </span>
-          <div className="tc-toast__body">
-            {item.title && <p className="tc-toast__title">{item.title}</p>}
-            <p className="tc-toast__msg">{item.message}</p>
-          </div>
-          <button
-            type="button"
-            className="tc-toast__close"
-            aria-label={t("shell.toast.close")}
-            onClick={() => dismiss(item.id)}
-          >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+      <span className="tc-toast__icon" aria-hidden="true">
+        {ICONS[toast.kind]}
+      </span>
+      <div className="tc-toast__body">
+        <p className="tc-toast__title">{toast.title}</p>
+        {toast.description && (
+          <p className="tc-toast__desc">{toast.description}</p>
+        )}
+      </div>
+      <button
+        type="button"
+        className="tc-toast__close"
+        aria-label="关闭通知"
+        onClick={() => dismiss(toast.id)}
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/** Fixed toast stack — mount once at the app root. */
+export function ToastViewport() {
+  const toasts = useToastStore((s) => s.toasts);
+  if (toasts.length === 0) return null;
+  return (
+    <div className="tc-toast-viewport" aria-label="通知" role="region">
+      {toasts.map((t) => (
+        <ToastCard key={t.id} toast={t} />
       ))}
     </div>
   );
 }
 
-export default ToastContainer;
+export default ToastViewport;

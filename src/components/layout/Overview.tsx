@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { getVolumes } from "../../lib/ipc";
-import type { VolumeInfo, AppSettings } from "../../lib/types";
+import type { AppSettings, VolumeInfo } from "../../lib/types";
 import { formatBytes } from "../../lib/format";
 import { SurfaceCard } from "../ui/SurfaceCard";
 import { ProgressRing } from "../ui/ProgressRing";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
-import { Onboarding } from "./Onboarding";
 import { useI18n } from "../../i18n";
 import { useSettingsStore } from "../../store/settingsStore";
 import type { ViewId } from "./Sidebar";
@@ -24,20 +23,27 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "ready"; volumes: VolumeInfo[] };
 
-function usageRatio(v: VolumeInfo): number {
-  if (v.totalBytes <= 0) return 0;
-  return Math.max(0, Math.min(1, v.usedBytes / v.totalBytes));
+const ONBOARDED_KEY = "trueclean.onboarded";
+
+function readOnboarded(): boolean {
+  try {
+    return localStorage.getItem(ONBOARDED_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
-function ringColor(ratio: number): string {
-  if (ratio >= 0.9) return "var(--danger)";
-  if (ratio >= 0.75) return "var(--warn)";
-  return "var(--accent)";
+function writeOnboarded(): void {
+  try {
+    localStorage.setItem(ONBOARDED_KEY, "1");
+  } catch {
+    /* ignore persistence failures */
+  }
 }
 
-/** Returns true when the configured provider has the credentials it needs. */
+/** A provider is considered ready when its required credential is set. */
 function isAiConfigured(settings: AppSettings | null): boolean {
-  if (!settings) return true; // don't prompt before settings have loaded
+  if (!settings) return true; // hide the hint while settings are still loading
   switch (settings.provider) {
     case "claude":
       return settings.claudeApiKey.trim().length > 0;
@@ -50,6 +56,17 @@ function isAiConfigured(settings: AppSettings | null): boolean {
   }
 }
 
+function usageRatio(v: VolumeInfo): number {
+  if (v.totalBytes <= 0) return 0;
+  return Math.max(0, Math.min(1, v.usedBytes / v.totalBytes));
+}
+
+function ringColor(ratio: number): string {
+  if (ratio >= 0.9) return "var(--danger)";
+  if (ratio >= 0.75) return "var(--warn)";
+  return "var(--accent)";
+}
+
 interface GuideCard {
   view: ViewId;
   titleKey: string;
@@ -60,8 +77,8 @@ interface GuideCard {
 const GUIDE_CARDS: GuideCard[] = [
   {
     view: "junk",
-    titleKey: "shell.overview.guideJunkTitle",
-    descKey: "shell.overview.guideJunkDesc",
+    titleKey: "shell.overview.guide.junkTitle",
+    descKey: "shell.overview.guide.junkDesc",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
@@ -70,8 +87,8 @@ const GUIDE_CARDS: GuideCard[] = [
   },
   {
     view: "large",
-    titleKey: "shell.overview.guideLargeTitle",
-    descKey: "shell.overview.guideLargeDesc",
+    titleKey: "shell.overview.guide.largeTitle",
+    descKey: "shell.overview.guide.largeDesc",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6" />
@@ -80,8 +97,8 @@ const GUIDE_CARDS: GuideCard[] = [
   },
   {
     view: "duplicates",
-    titleKey: "shell.overview.guideDupTitle",
-    descKey: "shell.overview.guideDupDesc",
+    titleKey: "shell.overview.guide.dupTitle",
+    descKey: "shell.overview.guide.dupDesc",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="9" y="9" width="11" height="11" rx="2" />
@@ -91,8 +108,8 @@ const GUIDE_CARDS: GuideCard[] = [
   },
   {
     view: "apps",
-    titleKey: "shell.overview.guideAppsTitle",
-    descKey: "shell.overview.guideAppsDesc",
+    titleKey: "shell.overview.guide.appsTitle",
+    descKey: "shell.overview.guide.appsDesc",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -104,17 +121,22 @@ const GUIDE_CARDS: GuideCard[] = [
   },
 ];
 
+interface OnboardingStep {
+  titleKey: string;
+  descKey: string;
+}
+
+const ONBOARD_STEPS: OnboardingStep[] = [
+  { titleKey: "shell.onboarding.step1Title", descKey: "shell.onboarding.step1Desc" },
+  { titleKey: "shell.onboarding.step2Title", descKey: "shell.onboarding.step2Desc" },
+  { titleKey: "shell.onboarding.step3Title", descKey: "shell.onboarding.step3Desc" },
+];
+
 export function Overview({ onStartScan, onNavigate }: OverviewProps) {
   const { t } = useI18n();
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [onboarded, setOnboarded] = useState<boolean>(readOnboarded);
   const settings = useSettingsStore((s) => s.settings);
-  const settingsLoading = useSettingsStore((s) => s.loading);
-  const loadSettings = useSettingsStore((s) => s.load);
-
-  // Load settings once so we can detect a missing AI key.
-  useEffect(() => {
-    if (!settings && !settingsLoading) void loadSettings();
-  }, [settings, settingsLoading, loadSettings]);
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
@@ -125,7 +147,7 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
       const message =
         err && typeof err === "object" && "message" in err
           ? String((err as { message: unknown }).message)
-          : t("shell.overview.readVolumesFail");
+          : t("shell.overview.loadError");
       setState({ status: "error", message });
     }
   }, [t]);
@@ -134,45 +156,88 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
     void load();
   }, [load]);
 
-  const showAiPrompt = !isAiConfigured(settings);
+  const finishOnboarding = useCallback(() => {
+    writeOnboarded();
+    setOnboarded(true);
+  }, []);
+
+  const handleStart = useCallback(() => {
+    finishOnboarding();
+    onStartScan();
+  }, [finishOnboarding, onStartScan]);
+
+  const showAiHint = !isAiConfigured(settings);
 
   return (
     <div className="tc-overview">
-      <Onboarding onStart={onStartScan} />
+      {!onboarded ? (
+        <section className="tc-onboard" aria-labelledby="tc-onboard-title">
+          <div className="tc-onboard__copy">
+            <p className="tc-hero__eyebrow">{t("shell.onboarding.eyebrow")}</p>
+            <h2 id="tc-onboard-title" className="tc-hero__title">
+              {t("shell.onboarding.title")}
+            </h2>
+            <p className="tc-hero__lead">{t("shell.onboarding.lead")}</p>
+          </div>
+          <ol className="tc-onboard__steps">
+            {ONBOARD_STEPS.map((step, i) => (
+              <li key={step.titleKey} className="tc-onboard__step">
+                <span className="tc-onboard__num" aria-hidden="true">
+                  {i + 1}
+                </span>
+                <div>
+                  <h3 className="tc-onboard__step-title">
+                    {t(step.titleKey)}
+                  </h3>
+                  <p className="tc-onboard__step-desc">{t(step.descKey)}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <div className="tc-hero__cta">
+            <Button variant="primary" size="lg" onClick={handleStart}>
+              {t("shell.onboarding.start")}
+            </Button>
+            <Button variant="ghost" size="lg" onClick={finishOnboarding}>
+              {t("shell.onboarding.skip")}
+            </Button>
+          </div>
+        </section>
+      ) : (
+        <section className="tc-hero">
+          <div className="tc-hero__copy">
+            <p className="tc-hero__eyebrow">{t("shell.overview.eyebrow")}</p>
+            <h2 className="tc-hero__title">{t("shell.overview.title")}</h2>
+            <p className="tc-hero__lead">{t("shell.overview.lead")}</p>
+            <div className="tc-hero__cta">
+              <Button variant="primary" size="lg" onClick={onStartScan}>
+                {t("shell.overview.startScan")}
+              </Button>
+              <Button variant="ghost" size="lg" onClick={() => onNavigate("junk")}>
+                {t("shell.overview.quickClean")}
+              </Button>
+            </div>
+          </div>
+          <div className="tc-hero__glow" aria-hidden="true" />
+        </section>
+      )}
 
-      {showAiPrompt && (
-        <SurfaceCard elevation="sm" className="tc-ai-prompt" role="note">
-          <span className="tc-ai-prompt__icon" aria-hidden="true">
+      {showAiHint && (
+        <SurfaceCard elevation="sm" className="tc-aihint" role="note">
+          <span className="tc-aihint__icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" />
             </svg>
           </span>
-          <div className="tc-ai-prompt__body">
-            <h3 className="tc-ai-prompt__title">{t("shell.aiKeyPrompt.title")}</h3>
-            <p className="tc-ai-prompt__desc">{t("shell.aiKeyPrompt.desc")}</p>
+          <div className="tc-aihint__body">
+            <h3 className="tc-aihint__title">{t("shell.aiKeyHint.title")}</h3>
+            <p className="tc-aihint__desc">{t("shell.aiKeyHint.desc")}</p>
           </div>
           <Button variant="subtle" size="sm" onClick={() => onNavigate("settings")}>
-            {t("shell.aiKeyPrompt.action")}
+            {t("shell.aiKeyHint.goSettings")}
           </Button>
         </SurfaceCard>
       )}
-
-      <section className="tc-hero">
-        <div className="tc-hero__copy">
-          <p className="tc-hero__eyebrow">{t("shell.overview.heroEyebrow")}</p>
-          <h2 className="tc-hero__title">{t("shell.overview.heroTitle")}</h2>
-          <p className="tc-hero__lead">{t("shell.overview.heroLead")}</p>
-          <div className="tc-hero__cta">
-            <Button variant="primary" size="lg" onClick={onStartScan}>
-              {t("shell.overview.ctaScan")}
-            </Button>
-            <Button variant="ghost" size="lg" onClick={() => onNavigate("junk")}>
-              {t("shell.overview.ctaJunk")}
-            </Button>
-          </div>
-        </div>
-        <div className="tc-hero__glow" aria-hidden="true" />
-      </section>
 
       <section className="tc-section">
         <header className="tc-section__head">
@@ -202,7 +267,7 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
           <SurfaceCard elevation="sm">
             <EmptyState
               compact
-              title={t("shell.overview.readVolumesFail")}
+              title={t("shell.overview.loadError")}
               description={state.message}
               action={
                 <Button variant="subtle" onClick={() => void load()}>
@@ -250,7 +315,7 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
                       {v.name || v.mountPoint}
                       {v.isRemovable && (
                         <span className="tc-vol-card__badge">
-                          {t("shell.overview.volRemovable")}
+                          {t("shell.overview.removable")}
                         </span>
                       )}
                     </div>
@@ -259,11 +324,13 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
                         {formatBytes(v.usedBytes)}
                       </span>
                       <span className="tc-vol-card__total">
-                        {t("shell.overview.volOf", { size: formatBytes(v.totalBytes) })}
+                        / {formatBytes(v.totalBytes)}
                       </span>
                     </div>
                     <div className="tc-vol-card__free tabular">
-                      {t("shell.overview.volFree", { size: formatBytes(v.availableBytes) })} · {v.fileSystem}
+                      {t("shell.overview.free", { size: formatBytes(v.availableBytes) })}
+                      {" · "}
+                      {v.fileSystem}
                     </div>
                   </div>
                 </SurfaceCard>

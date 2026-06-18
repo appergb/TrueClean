@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "./hooks/useTheme";
 import { useAgentStore } from "./store/agentStore";
+import { useSettingsStore } from "./store/settingsStore";
+import { useI18n } from "./i18n";
 import { Sidebar } from "./components/layout/Sidebar";
 import type { ViewId } from "./components/layout/Sidebar";
 import { TopBar } from "./components/layout/TopBar";
@@ -14,10 +16,10 @@ import StartupItems from "./components/cleanup/StartupItems";
 import SettingsPanel from "./components/settings/SettingsPanel";
 import AgentPanel from "./components/agent/AgentPanel";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
-import { ToastContainer } from "./components/ui/Toast";
-import { useI18n } from "./i18n";
+import { ToastViewport } from "./components/ui/Toast";
 import "./components/ui/ui.css";
 import "./components/layout/layout.css";
+import "./components/ui/feedback.css";
 
 function ViewRouter({
   view,
@@ -59,29 +61,25 @@ export default function App() {
   const { t } = useI18n();
   const agentOpen = useAgentStore((s) => s.open);
   const setAgentOpen = useAgentStore((s) => s.setOpen);
+  const loadSettings = useSettingsStore((s) => s.load);
 
-  // Close the agent drawer on Escape — keyboard operability (WCAG 2.1.2).
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape" && agentOpen) {
-        e.preventDefault();
-        setAgentOpen(false);
-      }
-    },
-    [agentOpen, setAgentOpen],
-  );
+  // Load persisted settings once so the Overview AI-key hint can react.
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
 
+  // Escape closes the agent drawer — keyboard operability (WCAG 2.1.2).
   useEffect(() => {
     if (!agentOpen) return;
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [agentOpen, handleKeyDown]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAgentOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [agentOpen, setAgentOpen]);
 
   return (
-    <ErrorBoundary resetKey={view}>
-      <a href="#tc-main-content" className="tc-skip-link">
-        {t("shell.common.skipToContent")}
-      </a>
+    <ErrorBoundary>
       <div className={`tc-app${agentOpen ? " tc-app--agent-open" : ""}`}>
         <Sidebar current={view} onNavigate={setView} />
 
@@ -93,8 +91,11 @@ export default function App() {
             agentOpen={agentOpen}
             onToggleAgent={() => setAgentOpen(!agentOpen)}
           />
-          <main className="tc-content" key={view} id="tc-main-content" tabIndex={-1}>
-            <ViewRouter view={view} onNavigate={setView} />
+          <main className="tc-content" key={view}>
+            {/* Inner boundary isolates view crashes so the shell stays usable. */}
+            <ErrorBoundary>
+              <ViewRouter view={view} onNavigate={setView} />
+            </ErrorBoundary>
           </main>
         </div>
 
@@ -115,8 +116,9 @@ export default function App() {
         >
           <AgentPanel />
         </div>
+
+        <ToastViewport />
       </div>
-      <ToastContainer />
     </ErrorBoundary>
   );
 }

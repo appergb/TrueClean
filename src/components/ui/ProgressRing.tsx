@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { t } from "../../i18n";
 
 interface ProgressRingProps {
   /** Progress in the range 0..1 (values are clamped). */
@@ -13,8 +14,6 @@ interface ProgressRingProps {
   color?: string;
   /** Hide the auto-generated percent label. */
   hideLabel?: boolean;
-  /** Accessible label. Defaults to the percent value. */
-  ariaLabel?: string;
 }
 
 export function ProgressRing({
@@ -24,7 +23,6 @@ export function ProgressRing({
   label,
   color,
   hideLabel = false,
-  ariaLabel,
 }: ProgressRingProps) {
   const clamped = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
   const radius = (size - thickness) / 2;
@@ -37,7 +35,7 @@ export function ProgressRing({
       className="tc-ring"
       style={{ width: size, height: size }}
       role="img"
-      aria-label={ariaLabel ?? percentText}
+      aria-label={t("shell.ring.used", { pct: percentText })}
     >
       <svg
         className="tc-ring__svg"

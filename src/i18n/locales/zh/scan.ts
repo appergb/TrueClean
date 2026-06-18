@@ -1,9 +1,9 @@
-// Scan namespace — owned by B2 (components/scan/*, hooks/useScan.ts, store/scanStore.ts).
-// Fill this with all scan-view strings. Access via t("scan.<path>").
-// Keep keys stable once other code references them.
-
-export const scan = {
-  // TODO(B2): add scan view strings here, e.g.
-  // title: "扫描",
-  // states: { idle: "未扫描", scanning: "扫描中", done: "完成", empty: "无结果", error: "出错" },
-};
+// B2 (UI-SCAN) owns this file. Fill scan-view strings here.
+// Access via t('scan.<key>'). Keep keys stable, camelCase.
+// Example:
+//   export const scan = {
+//     title: "扫描磁盘",
+//     progress: "已扫描 {files} 个文件",
+//   } as const;
+export const scan = {} as const;
+export default scan;

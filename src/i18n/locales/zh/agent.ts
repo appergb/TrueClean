@@ -1,9 +1,4 @@
-// Agent namespace — owned by B4 (components/agent/*, hooks/useAgent.ts, store/agentStore.ts).
-// Fill this with all AI-assistant strings. Access via t("agent.<path>").
-
-export const agent = {
-  // TODO(B4): add agent panel strings here, e.g.
-  // title: "AI 助手",
-  // placeholder: "问问如何清理…",
-  // send: "发送",
-};
+// B4 (UI-AGENT) owns this file. Fill agent-panel strings here.
+// Access via t('agent.<key>'). Keep keys stable, camelCase.
+export const agent = {} as const;
+export default agent;

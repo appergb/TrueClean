@@ -1,0 +1,166 @@
+/* Feedback layer — Toast notifications, ErrorBoundary fallback, dev crash test.
+   Colors/spacing/motion all derive from tokens.css. */
+
+/* ============================ Toasts ============================ */
+.tc-toast-viewport {
+  position: fixed;
+  z-index: 100;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: min(380px, 92vw);
+  pointer-events: none;
+}
+.tc-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+  animation: tc-toast-in var(--duration-normal) var(--ease-spring);
+}
+@keyframes tc-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tc-toast__icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+}
+.tc-toast--success .tc-toast__icon {
+  color: var(--good);
+  background: color-mix(in oklch, var(--good) 14%, transparent);
+}
+.tc-toast--error .tc-toast__icon {
+  color: var(--danger);
+  background: color-mix(in oklch, var(--danger) 14%, transparent);
+}
+.tc-toast--info .tc-toast__icon,
+.tc-toast--loading .tc-toast__icon {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+.tc-toast--loading .tc-toast__icon svg {
+  animation: tc-toast-spin 0.9s linear infinite;
+}
+@keyframes tc-toast-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.tc-toast__body {
+  flex: 1;
+  min-width: 0;
+}
+.tc-toast__title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+.tc-toast__desc {
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.tc-toast__close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  transition:
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease;
+}
+.tc-toast__close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* ========================= ErrorBoundary ======================== */
+.tc-error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-10) var(--space-6);
+  margin: 0 auto;
+  max-width: 520px;
+}
+.tc-error-boundary__icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  background: color-mix(in oklch, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+.tc-error-boundary__title {
+  font-size: var(--text-xl);
+  color: var(--text);
+}
+.tc-error-boundary__desc {
+  font-size: var(--text-md);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.tc-error-boundary__detail {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tc-error-boundary__actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+/* ========================= CrashTest (dev) ====================== */
+.tc-crashtest {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  border: 1px dashed var(--border-strong);
+  transition:
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+}
+.tc-crashtest:hover {
+  background: color-mix(in oklch, var(--danger) 10%, transparent);
+  color: var(--danger);
+  border-color: var(--danger);
+}
