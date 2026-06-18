@@ -9,3 +9,9 @@ dist-ssr
 # Rust / Tauri
 src-tauri/target
 src-tauri/gen
+
+# Design reference (local only)
+Space Lens.html
+
+# Claude Code worktrees
+.claude/
