@@ -5,9 +5,7 @@
 //! `choices[].delta.content` (text) and `choices[].delta.tool_calls`
 //! (fragmented; `arguments` strings are accumulated by tool-call index).
 
-use crate::agent::providers::traits::{
-    for_each_line, sse_data, to_role_content, ProviderDelta,
-};
+use crate::agent::providers::traits::{for_each_line, sse_data, to_role_content, ProviderDelta};
 use crate::error::{AppError, AppResult};
 use crate::model::ChatMessage;
 use serde_json::{json, Value};

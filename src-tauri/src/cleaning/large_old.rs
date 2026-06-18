@@ -13,7 +13,9 @@ const SECS_PER_DAY: u64 = 86_400;
 
 /// Convert a [`SystemTime`] to unix seconds, if representable.
 fn unix_secs(t: SystemTime) -> Option<i64> {
-    t.duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).ok()
+    t.duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .ok()
 }
 
 /// Walk `root` collecting files with `size >= min_size` that are also older
@@ -21,7 +23,11 @@ fn unix_secs(t: SystemTime) -> Option<i64> {
 /// sorted by size descending and capped at [`MAX_RESULTS`].
 ///
 /// Unreadable entries are skipped. Symlinks are not followed.
-pub fn find_large_old(root: &Path, min_size: u64, older_than_days: u64) -> AppResult<Vec<FileEntry>> {
+pub fn find_large_old(
+    root: &Path,
+    min_size: u64,
+    older_than_days: u64,
+) -> AppResult<Vec<FileEntry>> {
     if !root.exists() {
         return Err(crate::error::AppError::InvalidPath(
             root.to_string_lossy().into_owned(),
@@ -32,7 +38,9 @@ pub fn find_large_old(root: &Path, min_size: u64, older_than_days: u64) -> AppRe
     let cutoff = if older_than_days == 0 {
         None
     } else {
-        SystemTime::now().checked_sub(std::time::Duration::from_secs(older_than_days * SECS_PER_DAY))
+        SystemTime::now().checked_sub(std::time::Duration::from_secs(
+            older_than_days * SECS_PER_DAY,
+        ))
     };
 
     let mut results: Vec<FileEntry> = Vec::new();

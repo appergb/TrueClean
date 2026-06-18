@@ -42,7 +42,13 @@ pub async fn run_chat(
     let tool_specs = tools::tool_specs();
 
     let result = drive(
-        &topic, &mut messages, &settings, &app, &cancel, &http, &tool_specs,
+        &topic,
+        &mut messages,
+        &settings,
+        &app,
+        &cancel,
+        &http,
+        &tool_specs,
     )
     .await;
 
@@ -98,7 +104,12 @@ async fn drive(
             };
 
             let stop_reason = call_provider(
-                settings, http, SYSTEM_PROMPT, messages, tool_specs, &mut on_delta,
+                settings,
+                http,
+                SYSTEM_PROMPT,
+                messages,
+                tool_specs,
+                &mut on_delta,
             )
             .await?;
 

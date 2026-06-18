@@ -30,11 +30,11 @@ pub fn read_settings() -> AppSettings {
 /// Load persisted settings into managed state. Called at startup.
 pub fn load_into_state(app: &AppHandle) {
     let loaded = read_settings();
-    let state = app.state::<AppState>();
-    if let Ok(mut guard) = state.settings.lock() {
-        *guard = loaded;
-    }
-    drop(state);
+    let _ = app
+        .state::<AppState>()
+        .settings
+        .lock()
+        .map(|mut guard| *guard = loaded);
 }
 
 #[tauri::command]

@@ -103,9 +103,7 @@ pub async fn stream_chat(
                         // Ollama returns arguments as an object (sometimes a
                         // JSON string); normalize both to a Value.
                         let args = match func.get("arguments") {
-                            Some(Value::String(s)) => {
-                                serde_json::from_str(s).unwrap_or(json!({}))
-                            }
+                            Some(Value::String(s)) => serde_json::from_str(s).unwrap_or(json!({})),
                             Some(v) => v.clone(),
                             None => json!({}),
                         };

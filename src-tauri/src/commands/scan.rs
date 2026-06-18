@@ -68,11 +68,12 @@ pub async fn scan_path(
             let _ = emit_app.emit(PROGRESS_EVENT, progress);
         };
 
-        crate::scanner::engine::scan_tree(&root, &options, &task_cancel, &on_progress)
-            .map(|mut result| {
+        crate::scanner::engine::scan_tree(&root, &options, &task_cancel, &on_progress).map(
+            |mut result| {
                 result.scan_id = task_scan_id.clone();
                 result
-            })
+            },
+        )
     });
 
     let result = match join.await {

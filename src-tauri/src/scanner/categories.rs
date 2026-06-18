@@ -147,7 +147,8 @@ fn is_application_path(norm: &str, ext: &str) -> bool {
 fn is_archive_ext(ext: &str) -> bool {
     matches!(
         ext,
-        "zip" | "dmg"
+        "zip"
+            | "dmg"
             | "tar"
             | "gz"
             | "tgz"
@@ -179,7 +180,8 @@ fn is_media_ext(ext: &str) -> bool {
 fn is_document_ext(ext: &str) -> bool {
     matches!(
         ext,
-        "pdf" | "doc"
+        "pdf"
+            | "doc"
             | "docx"
             | "xls"
             | "xlsx"
