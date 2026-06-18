@@ -5,6 +5,7 @@ pub mod cleaning;
 pub mod commands;
 pub mod error;
 pub mod model;
+pub mod permissions;
 pub mod scanner;
 pub mod state;
 
@@ -45,6 +46,10 @@ pub fn run() {
             // settings
             commands::settings::get_settings,
             commands::settings::save_settings,
+            // permissions
+            commands::permissions::get_permission_status,
+            commands::permissions::open_system_permission_settings,
+            commands::permissions::get_helper_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running TrueClean");

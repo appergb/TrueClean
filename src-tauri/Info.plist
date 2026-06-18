@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>TrueClean 需要控制 Finder 以将文件移入废纸篓并支持撤销还原。</string>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>TrueClean 需要访问桌面文件夹以扫描和清理磁盘。</string>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>TrueClean 需要访问文档文件夹以扫描和清理磁盘。</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>TrueClean 需要访问下载文件夹以扫描和清理磁盘。</string>
+</dict>
+</plist>

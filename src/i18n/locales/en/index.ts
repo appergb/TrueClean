@@ -3,8 +3,9 @@
 import { agent } from "./agent";
 import { cleanup } from "./cleanup";
 import { lens } from "./lens";
+import { permissions } from "./permissions";
 import { scan } from "./scan";
 import { shell } from "./shell";
 
-export const en = { shell, scan, cleanup, agent, lens };
+export const en = { shell, scan, cleanup, agent, lens, permissions };
 export default en;

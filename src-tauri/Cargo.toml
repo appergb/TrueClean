@@ -44,6 +44,11 @@ bytes = "1"
 chrono = { version = "0.4", features = ["clock"] }
 uuid = { version = "1", features = ["v4"] }
 
+# Platform-specific
+# libc: macOS/Linux 上用于 geteuid() 检测管理员权限
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+libc = "0.2"
+
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 

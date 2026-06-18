@@ -12,7 +12,9 @@ import type {
   CleanReport,
   DuplicateGroup,
   FileEntry,
+  HelperStatus,
   JunkGroup,
+  PermissionStatus,
   ScanOptions,
   ScanProgress,
   ScanResult,
@@ -85,6 +87,16 @@ export const onAgentEvent = (
   cb: (e: AgentEvent) => void,
 ): Promise<UnlistenFn> =>
   listen<AgentEvent>(`agent://event/${sessionId}`, (e) => cb(e.payload));
+
+// ----- Permissions ----------------------------------------------------------
+
+export const getPermissionStatus = () =>
+  invoke<PermissionStatus>("get_permission_status");
+
+export const openSystemPermissionSettings = (permissionType: string) =>
+  invoke<void>("open_system_permission_settings", { permissionType });
+
+export const getHelperStatus = () => invoke<HelperStatus>("get_helper_status");
 
 // ----- Settings ------------------------------------------------------------
 

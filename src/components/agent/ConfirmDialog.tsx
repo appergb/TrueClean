@@ -2,6 +2,8 @@
 // runner emits a `ConfirmationRequest` event; the user's choice is sent back
 // via the `confirm(id, approved)` store action which emits `agent://confirm`.
 
+import "./agent.css";
+
 import { useI18n } from "../../i18n";
 import type { ConfirmationRequest } from "../../store/agentStore";
 

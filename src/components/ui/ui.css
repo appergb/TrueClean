@@ -54,17 +54,14 @@
   line-height: 0;
 }
 
-/* primary — vivid accent, the "do it" action */
+/* primary — chartreuse action, the "do it" button */
 .tc-btn--primary {
-  background: linear-gradient(
-    180deg,
-    var(--accent) 0%,
-    var(--accent-strong) 100%
-  );
-  color: var(--text-on-accent);
+  background: var(--action);
+  color: var(--action-contrast);
   box-shadow: var(--shadow-sm);
 }
 .tc-btn--primary:hover {
+  background: color-mix(in oklch, var(--action) 88%, white);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
@@ -152,8 +149,8 @@
   border-color: var(--border);
 }
 .tc-icon-btn--primary {
-  background: var(--accent);
-  color: var(--text-on-accent);
+  background: var(--action);
+  color: var(--action-contrast);
 }
 .tc-icon-btn--primary:hover {
   filter: brightness(1.06);
@@ -163,9 +160,9 @@
   color: var(--danger);
 }
 .tc-icon-btn.is-active {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  border-color: color-mix(in oklch, var(--accent) 30%, transparent);
+  background: color-mix(in oklch, var(--action) 14%, transparent);
+  color: var(--action);
+  border-color: color-mix(in oklch, var(--action) 30%, transparent);
 }
 
 /* ========================== SurfaceCard ========================= */

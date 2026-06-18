@@ -39,7 +39,11 @@
     ],
     "category": "Utility",
     "shortDescription": "Cross-platform disk cleaner with an AI agent",
-    "longDescription": "TrueClean scans your disk, visualizes usage, identifies junk and system data, and lets an AI agent recommend and perform safe cleanups."
+    "longDescription": "TrueClean scans your disk, visualizes usage, identifies junk and system data, and lets an AI agent recommend and perform safe cleanups.",
+    "macOS": {
+      "infoPlist": "Info.plist",
+      "entitlements": "TrueClean.entitlements"
+    }
   },
   "plugins": {
     "updater": {

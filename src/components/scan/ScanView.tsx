@@ -1,5 +1,3 @@
-import "./scan.css";
-
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useState } from "react";
 

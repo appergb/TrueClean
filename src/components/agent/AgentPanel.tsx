@@ -1,5 +1,3 @@
-import "./agent.css";
-
 import { useEffect, useRef, useState } from "react";
 
 import { useAgent } from "../../hooks/useAgent";

@@ -43,6 +43,9 @@ pub struct ScanStats {
     pub skipped: u64,
     /// Distinct IO errors encountered while reading directory contents.
     pub errors: u64,
+    /// 目录因权限不足（`PermissionDenied`）而无法读取的次数。单独统计，
+    /// 便于前端提示用户授权 Full Disk Access 或以管理员身份运行。
+    pub permission_denied_count: u64,
 }
 
 /// An un-trimmed node holding the full child set; converted to a
@@ -66,6 +69,7 @@ struct ScanState {
     last_emit: Instant,
     skipped: u64,
     errors: u64,
+    permission_denied: u64,
 }
 
 /// Accumulators threaded through the whole walk. Atomics so parallel subtrees
@@ -97,6 +101,7 @@ impl<'a> ScanCtx<'a> {
                 last_emit: Instant::now(),
                 skipped: 0,
                 errors: 0,
+                permission_denied: 0,
             }),
         }
     }
@@ -139,6 +144,15 @@ impl<'a> ScanCtx<'a> {
         self.state.lock().expect("state lock poisoned").errors += 1;
     }
 
+    /// 记录一次权限拒绝错误。与 [`record_error`] 分开统计，便于前端区分
+    /// "权限不足需授权" 与 "普通 IO 错误"。
+    fn record_permission_error(&self) {
+        self.state
+            .lock()
+            .expect("state lock poisoned")
+            .permission_denied += 1;
+    }
+
     fn emit(&self, current_path: &Path, done: bool) {
         (self.on_progress)(ScanProgress {
             // Command layer overwrites scan_id before re-emitting; left empty here.
@@ -159,6 +173,7 @@ impl<'a> ScanCtx<'a> {
             ScanStats {
                 skipped: st.skipped,
                 errors: st.errors,
+                permission_denied_count: st.permission_denied,
             },
         )
     }
@@ -232,9 +247,15 @@ fn visit_dir(dir: &Path, depth: usize, ctx: &ScanCtx, ancestors: &[PathBuf]) -> 
 
     let read = match std::fs::read_dir(dir) {
         Ok(rd) => rd,
-        // Unreadable directory (permissions, vanished, etc.) — skip gracefully.
-        Err(_) => {
-            ctx.record_error();
+        Err(e) => {
+            // 区分权限拒绝与其他 IO 错误：权限拒绝单独计数，便于前端提示
+            // 用户授权 Full Disk Access 或以管理员身份运行。
+            if e.kind() == std::io::ErrorKind::PermissionDenied {
+                ctx.record_permission_error();
+            } else {
+                ctx.record_error();
+            }
+            // Unreadable directory (permissions, vanished, etc.) — skip gracefully.
             return Ok(RawNode {
                 name,
                 path: dir.to_string_lossy().into_owned(),

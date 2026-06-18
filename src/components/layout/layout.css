@@ -867,7 +867,7 @@
   inset: 0;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
-  background: radial-gradient(circle at 50% 42%, #101113, var(--bg) 72%);
+  background: radial-gradient(circle at 50% 42%, var(--surface-2), var(--bg) 72%);
   box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.55);
   overflow: hidden;
 }
@@ -1000,7 +1000,7 @@
 
 .tc-right__context-label {
   font-size: 10.5px;
-  color: #52565d;
+  color: var(--text-dim);
   flex: none;
 }
 
@@ -1039,7 +1039,7 @@
   border-radius: 14px;
   padding: 5px 11px;
   cursor: pointer;
-  color: #a9aeb6;
+  color: var(--text-faint);
   font-family: var(--font-sans);
   font-size: 11.5px;
   white-space: nowrap;
@@ -1557,7 +1557,7 @@
   padding-top: 7px;
   border-top: 1px solid var(--border-strong);
   font-size: 10px;
-  color: #52565d;
+  color: var(--text-dim);
 }
 
 /* ============================= Chat messages =================== */
@@ -1597,8 +1597,8 @@
 
 .tc-msg__bubble--user {
   max-width: 84%;
-  background: #1a2030;
-  border: 1px solid #2a3450;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
   border-radius: 13px;
   border-top-right-radius: 4px;
   padding: 9px 12px;
@@ -1839,4 +1839,60 @@
 /* ============================= Misc ============================= */
 .tc-space-7 {
   width: 28px;
+}
+
+/* ============================= 权限引导卡片 ===================== */
+.tc-perm-guide {
+  display: flex;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--action);
+  border-radius: 10px;
+  margin: 12px 0;
+}
+
+.tc-perm-guide--compact {
+  padding: 10px 12px;
+  gap: 10px;
+}
+
+.tc-perm-guide__icon {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--action);
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.tc-perm-guide__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tc-perm-guide__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.tc-perm-guide__desc p {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin: 0 0 4px;
+}
+
+.tc-perm-guide__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.tc-perm-guide__actions .tc-btn {
+  font-size: 12px;
+  padding: 6px 12px;
+  height: auto;
 }

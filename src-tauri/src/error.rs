@@ -25,6 +25,9 @@ pub enum AppError {
     #[error("Agent 错误: {0}")]
     Agent(String),
 
+    #[error("权限不足: {0}")]
+    PermissionDenied(String),
+
     #[error("{0}")]
     Other(String),
 }

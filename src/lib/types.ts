@@ -193,3 +193,19 @@ export type AgentEvent =
     }
   | { type: "done"; stopReason: string }
   | { type: "error"; message: string };
+
+// 权限状态快照 — 与 Rust `permissions.rs` 的 `PermissionStatus` 对应（camelCase）。
+export interface PermissionStatus {
+  fullDiskAccess: boolean;
+  isAdmin: boolean;
+  platform: string;
+  needsHelper: boolean;
+  skippedPaths: string[];
+}
+
+// macOS 特权辅助程序状态 — 与 Rust `HelperStatus` 对应。
+export interface HelperStatus {
+  installed: boolean;
+  version: string | null;
+  path: string;
+}

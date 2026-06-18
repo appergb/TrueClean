@@ -1,5 +1,3 @@
-import "./scan.css";
-
 import { hierarchy, pack } from "d3-hierarchy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 

@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { useI18n } from "../../i18n";
 import { Button } from "../ui/Button";
+import { PermissionGuide } from "./PermissionGuide";
 
 const STORAGE_KEY = "trueclean.onboarded";
 
@@ -117,6 +118,7 @@ export function Onboarding({ onStart }: OnboardingProps) {
           </li>
         ))}
       </ol>
+      <PermissionGuide />
       <div className="tc-onboard__cta">
         <Button variant="primary" size="lg" onClick={handleStart}>
           {t("shell.onboarding.start")}

@@ -2,9 +2,11 @@ import "./settings.css";
 
 import { useEffect, useState } from "react";
 
+import { usePermissions } from "../../hooks/usePermissions";
 import { useI18n, useLocaleStore } from "../../i18n";
 import type { AppSettings } from "../../lib/types";
 import { useSettingsStore } from "../../store/settingsStore";
+import { PermissionGuide } from "../layout/PermissionGuide";
 import Button from "../ui/Button";
 import { useToast } from "../ui/Toast";
 
@@ -55,6 +57,13 @@ export default function SettingsPanel() {
   const setLocale = useLocaleStore((s) => s.setLocale);
   const { settings, loading, saving, error, load, update, save } =
     useSettingsStore();
+  const {
+    status: permStatus,
+    helper: permHelper,
+    loading: permLoading,
+    refresh: refreshPerms,
+    openSettings: openPermSettings,
+  } = usePermissions();
   const [saved, setSaved] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [validation, setValidation] = useState<ValidationErrors>({});
@@ -68,6 +77,11 @@ export default function SettingsPanel() {
   useEffect(() => {
     if (settings?.language) setLocale(settings.language);
   }, [settings?.language, setLocale]);
+
+  // 加载权限状态
+  useEffect(() => {
+    void refreshPerms();
+  }, [refreshPerms]);
 
   const runValidation = (): boolean => {
     if (!settings) return false;
@@ -145,6 +159,84 @@ export default function SettingsPanel() {
         <h2 className="set-title">{t("cleanup.settings.title")}</h2>
         <p className="set-sub">{t("cleanup.settings.sub")}</p>
       </header>
+
+      <div className="set-section">
+        <h3 className="set-section__title">
+          {t("permissions.sectionTitle")}
+        </h3>
+        <p className="set-field__hint">{t("permissions.sectionSub")}</p>
+
+        <PermissionGuide compact />
+
+        <div className="set-toggle">
+          <span className="set-field__label">
+            {t("permissions.fullDiskAccess")}
+          </span>
+          <span
+            className={`set-status ${
+              permStatus?.fullDiskAccess ? "set-status--ok" : "set-status--err"
+            }`}
+          >
+            {permStatus
+              ? permStatus.fullDiskAccess
+                ? t("permissions.granted")
+                : t("permissions.notGranted")
+              : "—"}
+          </span>
+        </div>
+
+        <div className="set-toggle">
+          <span className="set-field__label">
+            {t("permissions.adminLabel")}
+          </span>
+          <span
+            className={`set-status ${
+              permStatus?.isAdmin ? "set-status--ok" : "set-status--err"
+            }`}
+          >
+            {permStatus
+              ? permStatus.isAdmin
+                ? t("permissions.granted")
+                : t("permissions.notGranted")
+              : "—"}
+          </span>
+        </div>
+
+        <div className="set-toggle">
+          <span className="set-field__label">
+            {t("permissions.helperLabel")}
+          </span>
+          <span
+            className={`set-status ${
+              permHelper?.installed ? "set-status--ok" : "set-status--err"
+            }`}
+          >
+            {permHelper
+              ? permHelper.installed
+                ? t("permissions.installed")
+                : t("permissions.notInstalled")
+              : "—"}
+          </span>
+        </div>
+
+        <div className="set-row">
+          <Button
+            variant="subtle"
+            onClick={() => void refreshPerms()}
+            disabled={permLoading}
+          >
+            {t("permissions.recheck")}
+          </Button>
+          {permStatus?.platform === "macos" && !permStatus.fullDiskAccess && (
+            <Button
+              variant="primary"
+              onClick={() => void openPermSettings("full_disk_access")}
+            >
+              {t("permissions.openSettings")}
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="set-section">
         <h3 className="set-section__title">{t("cleanup.settings.aiSection")}</h3>
