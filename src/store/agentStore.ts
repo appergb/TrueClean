@@ -79,7 +79,7 @@ async function teardown(): Promise<void> {
 }
 
 export const useAgentStore = create<AgentState>((set, get) => ({
-  open: false,
+  open: true,
   setOpen: (open) => set({ open }),
   toggle: () => set((s) => ({ open: !s.open })),
 

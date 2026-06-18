@@ -1,72 +1,80 @@
-/* Design tokens — single source of truth for color, type, spacing, motion.
-   Direction: premium system-utility. Cool neutrals, a vivid teal→green accent
-   that reads as "healthy / cleaned", real depth via layered surfaces.
-   Light is the default; [data-theme="dark"] overrides. */
+/* Design tokens — Space Lens visual system.
+   Dark-first premium desktop utility. Indigo→teal gradient as the primary
+   signal, chartreuse (#e4f222) as the action accent, layered dark surfaces
+   for real depth. Light theme retained as an opt-in alternative. */
 
 :root {
-  /* ---- Brand / accent ramp (teal → green, the "clean" signal) ---- */
-  --accent: oklch(64% 0.15 195);
-  --accent-strong: oklch(56% 0.16 195);
-  --accent-soft: oklch(95% 0.04 195);
-  --accent-contrast: oklch(99% 0 0);
-  --good: oklch(66% 0.17 150); /* freed / healthy */
-  --warn: oklch(74% 0.16 75); /* review needed */
-  --danger: oklch(58% 0.2 25); /* destructive */
+  /* ---- Brand / accent ramp (indigo → teal, the "lens" signal) ---- */
+  --accent: #5e6ad2; /* indigo primary */
+  --accent-strong: #02b8cc; /* teal secondary */
+  --accent-soft: rgba(94, 106, 210, 0.14);
+  --accent-contrast: #08090a;
+  --accent-gradient: linear-gradient(90deg, #5e6ad2 0%, #02b8cc 100%);
 
-  /* Category colors (used by treemap / sunburst / bars) */
-  --cat-system: oklch(62% 0.12 265);
-  --cat-applications: oklch(64% 0.15 195);
-  --cat-developer: oklch(60% 0.14 300);
-  --cat-documents: oklch(70% 0.13 230);
-  --cat-media: oklch(68% 0.16 25);
-  --cat-caches: oklch(74% 0.15 75);
-  --cat-logs: oklch(72% 0.11 110);
-  --cat-trash: oklch(58% 0.04 260);
-  --cat-downloads: oklch(66% 0.15 150);
-  --cat-archives: oklch(63% 0.13 330);
-  --cat-other: oklch(70% 0.02 260);
+  /* Action / status colors */
+  --action: #e4f222; /* chartreuse — primary action / checked */
+  --action-contrast: #08090a;
+  --good: #27a644; /* freed / healthy */
+  --warn: #c79a4e; /* review needed */
+  --danger: #eb5757; /* destructive */
 
-  /* ---- Light theme surfaces ---- */
-  --bg: oklch(97.5% 0.005 240);
-  --bg-elevated: oklch(99.5% 0.003 240);
-  --surface: oklch(100% 0 0);
-  --surface-2: oklch(98% 0.004 240);
-  --surface-3: oklch(95.5% 0.006 240);
-  --surface-glass: oklch(100% 0 0 / 0.7);
-  --border: oklch(90% 0.008 240);
-  --border-strong: oklch(84% 0.01 240);
+  /* Category colors (Space Lens 10 categories) */
+  --cat-system: #62666d;
+  --cat-applications: #5e6ad2;
+  --cat-developer: #02b8cc;
+  --cat-documents: #46a7a0;
+  --cat-media: #27a644;
+  --cat-caches: #eb5757;
+  --cat-logs: #c79a4e;
+  --cat-trash: #62666d;
+  --cat-downloads: #9b7ad2;
+  --cat-archives: #cf6f93;
+  --cat-other: #8a8f98;
 
-  --text: oklch(22% 0.01 250);
-  --text-muted: oklch(45% 0.01 250);
-  --text-faint: oklch(62% 0.01 250);
-  --text-on-accent: oklch(99% 0 0);
+  /* ---- Dark theme surfaces (default) ---- */
+  --bg: #08090a;
+  --bg-elevated: #0f1011;
+  --surface: #0c0d0e;
+  --surface-2: #161718;
+  --surface-3: #23252a;
+  --surface-glass: rgba(15, 16, 17, 0.7);
+  --border: #161718;
+  --border-strong: #23252a;
+  --border-faint: #2a2d33;
 
-  --shadow-sm: 0 1px 2px oklch(20% 0.02 250 / 0.06),
-    0 1px 1px oklch(20% 0.02 250 / 0.04);
-  --shadow-md: 0 4px 12px oklch(20% 0.02 250 / 0.08),
-    0 2px 4px oklch(20% 0.02 250 / 0.05);
-  --shadow-lg: 0 18px 48px oklch(20% 0.03 250 / 0.14),
-    0 6px 16px oklch(20% 0.02 250 / 0.08);
-  --ring: 0 0 0 3px oklch(64% 0.15 195 / 0.35);
+  --text: #f7f8f8;
+  --text-muted: #d0d6e0;
+  --text-faint: #8a8f98;
+  --text-dim: #62666d;
+  --text-on-accent: #08090a;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4),
+    0 1px 1px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5),
+    0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 18px 48px rgba(8, 9, 10, 0.7),
+    0 6px 16px rgba(8, 9, 10, 0.5);
+  --ring: 0 0 0 3px rgba(94, 106, 210, 0.4);
 
   /* ---- Typography ---- */
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
     "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif;
-  --font-mono: "SF Mono", "JetBrains Mono", "Cascadia Code", ui-monospace,
+  --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace,
     Menlo, Consolas, monospace;
 
-  --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-base: 0.875rem;
-  --text-md: 1rem;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.75rem;
+  --text-base: 0.8125rem;
+  --text-md: 0.875rem;
   --text-lg: 1.25rem;
-  --text-xl: 1.75rem;
-  --text-2xl: clamp(2rem, 1.2rem + 2.4vw, 3rem);
-  --text-display: clamp(2.6rem, 1.4rem + 4vw, 4.5rem);
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --text-display: 2.5rem;
 
+  --weight-thin: 300;
   --weight-normal: 400;
-  --weight-medium: 500;
-  --weight-semibold: 600;
+  --weight-medium: 510;
+  --weight-semibold: 590;
   --weight-bold: 700;
 
   /* ---- Spacing & radius ---- */
@@ -79,10 +87,11 @@
   --space-8: 3rem;
   --space-10: 4rem;
 
+  --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 22px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-full: 999px;
 
   /* ---- Motion ---- */
@@ -91,41 +100,47 @@
   --duration-slow: 420ms;
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-drill: cubic-bezier(0.22, 0.68, 0.2, 1);
 
   /* ---- Layout ---- */
-  --sidebar-width: 248px;
-  --agent-width: 420px;
-  --header-height: 60px;
+  --topbar-height: 52px;
+  --bottombar-height: 60px;
+  --leftbar-width: 300px;
+  --rightbar-width: 384px;
+  --rightbar-collapsed-width: 48px;
 }
 
-[data-theme="dark"] {
-  --accent: oklch(70% 0.15 195);
-  --accent-strong: oklch(76% 0.15 195);
-  --accent-soft: oklch(30% 0.05 195);
-  --good: oklch(72% 0.17 150);
-  --warn: oklch(78% 0.15 75);
-  --danger: oklch(66% 0.19 25);
+/* Light theme — opt-in alternative. Same token names, light values. */
+[data-theme="light"] {
+  --accent: #5e6ad2;
+  --accent-strong: #02b8cc;
+  --accent-soft: rgba(94, 106, 210, 0.1);
+  --action: #c9e019;
+  --action-contrast: #08090a;
 
-  --bg: oklch(18% 0.012 255);
-  --bg-elevated: oklch(21% 0.014 255);
-  --surface: oklch(23% 0.014 255);
-  --surface-2: oklch(26% 0.015 255);
-  --surface-3: oklch(30% 0.016 255);
-  --surface-glass: oklch(24% 0.014 255 / 0.7);
-  --border: oklch(32% 0.016 255);
-  --border-strong: oklch(40% 0.018 255);
+  --bg: #f7f8f8;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f0f1f3;
+  --surface-3: #e3e5e8;
+  --surface-glass: rgba(255, 255, 255, 0.7);
+  --border: #e3e5e8;
+  --border-strong: #d0d3d8;
+  --border-faint: #c4c7cc;
 
-  --text: oklch(95% 0.005 255);
-  --text-muted: oklch(72% 0.01 255);
-  --text-faint: oklch(56% 0.012 255);
+  --text: #08090a;
+  --text-muted: #4a4e55;
+  --text-faint: #62666d;
+  --text-dim: #8a8f98;
+  --text-on-accent: #08090a;
 
-  --shadow-sm: 0 1px 2px oklch(0% 0 0 / 0.3);
-  --shadow-md: 0 6px 16px oklch(0% 0 0 / 0.4);
-  --shadow-lg: 0 22px 56px oklch(0% 0 0 / 0.55);
-  --ring: 0 0 0 3px oklch(70% 0.15 195 / 0.4);
-
-  --cat-trash: oklch(64% 0.03 260);
-  --cat-other: oklch(60% 0.02 260);
+  --shadow-sm: 0 1px 2px rgba(20, 22, 26, 0.06),
+    0 1px 1px rgba(20, 22, 26, 0.04);
+  --shadow-md: 0 4px 12px rgba(20, 22, 26, 0.08),
+    0 2px 4px rgba(20, 22, 26, 0.05);
+  --shadow-lg: 0 18px 48px rgba(20, 22, 26, 0.14),
+    0 6px 16px rgba(20, 22, 26, 0.08);
+  --ring: 0 0 0 3px rgba(94, 106, 210, 0.3);
 }
 
 @media (prefers-reduced-motion: reduce) {

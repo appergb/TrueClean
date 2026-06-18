@@ -5,321 +5,161 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useScan } from "../../hooks/useScan";
 import { useI18n } from "../../i18n";
-import { formatBytes, formatPercent } from "../../lib/format";
-import type { Category, DirNode, VolumeInfo } from "../../lib/types";
-import CategoryBar from "./CategoryBar";
-import FileTree from "./FileTree";
-import ScanProgress from "./ScanProgress";
-import Sunburst from "./Sunburst";
-import Treemap from "./Treemap";
+import { fmtBytes } from "../../lib/lens-utils";
+import type { VolumeInfo } from "../../lib/types";
 
-type VizMode = "treemap" | "sunburst";
-
-/** Find the path of nodes from the tree root down to `target` (by path). */
-function findTrail(root: DirNode, targetPath: string): DirNode[] {
-  if (root.path === targetPath) return [root];
-  for (const child of root.children) {
-    const sub = findTrail(child, targetPath);
-    if (sub.length > 0) return [root, ...sub];
-  }
-  return [];
-}
-
+/**
+ * Space Lens — Landing stage.
+ *
+ * Centered lens animation (rotating rings + conic sweep + pulsing core) with
+ * the brand title, a short description, a disk picker, and the primary
+ * "扫描磁盘" action. Shown when `scanStore.status === "idle"`.
+ *
+ * The lens animation is pure CSS (keyframes in global.css): `lensspin` drives
+ * the conic sweep, `lensspinrev` the dashed ring, `lenspulse` the core dot.
+ */
 export default function ScanView() {
   const { t } = useI18n();
-  const {
-    volumes,
-    volumesLoading,
-    result,
-    status,
-    progress,
-    target,
-    error,
-    scan,
-    cancel,
-    reset,
-    loadVolumes,
-  } = useScan();
+  const { volumes, volumesLoading, loadVolumes, scan } = useScan();
 
-  const [selected, setSelected] = useState<string | null>(null);
-  const [viz, setViz] = useState<VizMode>("treemap");
-  const [drillPath, setDrillPath] = useState<string | null>(null);
-  const [hoverCat, setHoverCat] = useState<Category | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Reset drill focus to the tree root whenever a new result lands.
   useEffect(() => {
-    if (result) setDrillPath(result.tree.path);
-  }, [result]);
+    if (volumes.length === 0 && !volumesLoading) {
+      void loadVolumes();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const trail = useMemo(() => {
-    if (!result || !drillPath) return [];
-    const tr = findTrail(result.tree, drillPath);
-    return tr.length > 0 ? tr : [result.tree];
-  }, [result, drillPath]);
+  const selected: VolumeInfo | null = volumes[selectedIdx] ?? null;
 
-  const currentNode = trail[trail.length - 1] ?? result?.tree ?? null;
+  const diskLabel = useMemo(() => {
+    if (selected) return selected.name || selected.mountPoint;
+    return t("lens.brand.tag");
+  }, [selected, t]);
 
-  const handlePickFolder = async () => {
-    try {
-      const picked = await open({ directory: true, multiple: false });
-      if (typeof picked === "string") {
-        setSelected(picked);
-        void scan(picked);
-      }
-    } catch {
-      // Dialog dismissed or unavailable; nothing to do.
+  const diskSizeLabel = useMemo(() => {
+    if (selected) return fmtBytes(selected.totalBytes);
+    return t("lens.landing.diskSize");
+  }, [selected, t]);
+
+  const startScan = () => {
+    const path = selected?.mountPoint ?? "/";
+    void scan(path);
+  };
+
+  const pickFolder = async () => {
+    const chosen = await open({ directory: true, multiple: false });
+    if (typeof chosen === "string" && chosen.length > 0) {
+      void scan(chosen);
     }
   };
 
-  const handleScanVolume = (vol: VolumeInfo) => {
-    setSelected(vol.mountPoint);
-    void scan(vol.mountPoint);
-  };
-
-  const drillTo = (child: DirNode) => setDrillPath(child.path);
-  const navigateTo = (index: number) => {
-    const node = trail[index];
-    if (node) setDrillPath(node.path);
-  };
-
-  const truncatedPct = useMemo(() => {
-    if (!currentNode) return 0;
-    const childrenSum = currentNode.children.reduce(
-      (s, c) => s + c.sizeBytes,
-      0,
-    );
-    if (currentNode.sizeBytes <= 0) return 0;
-    return (1 - childrenSum / currentNode.sizeBytes) * 100;
-  }, [currentNode]);
-
   return (
-    <section className="scanview" aria-label={t("scan.ariaLabel")}>
-      <header className="scanview__head">
-        <div>
-          <h1 className="scanview__title">{t("scan.title")}</h1>
-          <p className="scanview__subtitle">{t("scan.subtitle")}</p>
+    <div className="tc-landing">
+      {/* Lens animation — 280×280, pure CSS keyframes. */}
+      <div className="tc-landing__lens" aria-hidden="true">
+        <div className="tc-landing__ring-outer" />
+        <div className="tc-landing__ring-mid" />
+        <div className="tc-landing__ring-dashed" />
+        <div className="tc-landing__sweep" />
+        <div className="tc-landing__core">
+          <div className="tc-landing__pulse" />
         </div>
-        {status === "scanning" && (
-          <button className="scanview__cancel-top" onClick={() => void cancel()}>
-            {t("scan.cancel")}
-          </button>
-        )}
-      </header>
-
-      {/* Target picker */}
-      <div className="scanview__targets">
-        {volumesLoading && volumes.length === 0 && (
-          <div className="scanview__targets-loading">{t("scan.targetsLoading")}</div>
-        )}
-        {volumes.map((vol) => {
-          const usedPct =
-            vol.totalBytes > 0
-              ? (vol.usedBytes / vol.totalBytes) * 100
-              : 0;
-          const isActive = selected === vol.mountPoint;
-          return (
-            <button
-              key={vol.mountPoint}
-              className={`volcard${isActive ? " is-active" : ""}`}
-              onClick={() => handleScanVolume(vol)}
-              disabled={status === "scanning"}
-            >
-              <div className="volcard__top">
-                <span className="volcard__name">{vol.name}</span>
-                {vol.isRemovable && (
-                  <span className="volcard__tag">{t("scan.removable")}</span>
-                )}
-              </div>
-              <div className="volcard__meter" aria-hidden>
-                <span
-                  className="volcard__meter-fill"
-                  style={{ width: `${Math.min(usedPct, 100)}%` }}
-                />
-              </div>
-              <div className="volcard__stats">
-                <span className="tabular">
-                  {formatBytes(vol.usedBytes)} / {formatBytes(vol.totalBytes)}
-                </span>
-                <span className="volcard__free tabular">
-                  {t("scan.free", { size: formatBytes(vol.availableBytes) })}
-                </span>
-              </div>
-            </button>
-          );
-        })}
-
-        <button
-          className="volcard volcard--custom"
-          onClick={handlePickFolder}
-          disabled={status === "scanning"}
-        >
-          <span className="volcard__plus" aria-hidden>
-            +
-          </span>
-          <span className="volcard__name">{t("scan.pickFolder")}</span>
-          <span className="volcard__hint">{t("scan.pickFolderHint")}</span>
-        </button>
-
-        {!volumesLoading && volumes.length === 0 && (
-          <button
-            className="scanview__retry"
-            onClick={() => void loadVolumes()}
-          >
-            {t("scan.retryVolumes")}
-          </button>
-        )}
       </div>
 
-      {/* Error state */}
-      {status === "error" && (
-        <div className="scanview__error" role="alert">
-          <strong>{t("scan.error.title")}</strong>
-          <span>{error ?? t("scan.error.unknown")}</span>
-          {target && (
-            <button onClick={() => void scan(target)}>{t("scan.retry")}</button>
-          )}
-        </div>
-      )}
+      <div className="tc-landing__copy">
+        <h1 className="tc-landing__title">{t("lens.landing.title")}</h1>
+        <p className="tc-landing__desc">{t("lens.landing.desc")}</p>
+      </div>
 
-      {/* Loading / in-progress state */}
-      {status === "scanning" && (
-        <ScanProgress
-          progress={progress}
-          target={target}
-          onCancel={() => void cancel()}
-        />
-      )}
-
-      {/* Partial state (cancelled with partial data) */}
-      {status === "partial" && progress && (
-        <div className="scanview__partial" role="status">
-          <div className="scanview__partial-head">
-            <h2 className="scanview__partial-title">{t("scan.partial.title")}</h2>
-            <p className="scanview__partial-desc">{t("scan.partial.desc")}</p>
-          </div>
-          <div className="scanview__partial-stats">
-            <div className="scanview__partial-stat">
-              <span className="scanview__partial-num tabular">
-                {progress.scannedFiles.toLocaleString()}
-              </span>
-              <span className="scanview__partial-label">
-                {t("scan.partial.scannedFiles")}
-              </span>
-            </div>
-            <div className="scanview__partial-stat">
-              <span className="scanview__partial-num tabular">
-                {formatBytes(progress.scannedBytes)}
-              </span>
-              <span className="scanview__partial-label">
-                {t("scan.partial.scannedBytes")}
-              </span>
-            </div>
-          </div>
-          <div className="scanview__partial-actions">
-            {target && (
-              <button
-                className="scanview__partial-primary"
-                onClick={() => void scan(target)}
-              >
-                {t("scan.partial.rescan")}
-              </button>
-            )}
+      <div className="tc-landing__actions">
+        <div className="tc-landing__row">
+          {/* Disk picker — cycles volumes, opens a small menu. */}
+          <div className="tc-landing__picker">
             <button
-              className="scanview__partial-ghost"
-              onClick={() => reset()}
+              type="button"
+              className="tc-landing__disk-pick"
+              onClick={() => setPickerOpen((v) => !v)}
+              aria-haspopup="listbox"
+              aria-expanded={pickerOpen}
             >
-              {t("scan.partial.clear")}
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--text-faint)"
+                strokeWidth="1.6"
+                aria-hidden="true"
+              >
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <circle cx="16.5" cy="12" r="1.5" fill="var(--text-faint)" stroke="none" />
+              </svg>
+              <span className="tc-landing__disk-name">{diskLabel}</span>
+              <span className="tc-landing__disk-size">{diskSizeLabel}</span>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--text-dim)"
+                strokeWidth="2"
+                aria-hidden="true"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
             </button>
+
+            {pickerOpen && volumes.length > 0 && (
+              <ul className="tc-landing__picker-menu" role="listbox">
+                {volumes.map((v, i) => (
+                  <li key={v.mountPoint}>
+                    <button
+                      type="button"
+                      className={`tc-landing__picker-item${i === selectedIdx ? " is-active" : ""}`}
+                      role="option"
+                      aria-selected={i === selectedIdx}
+                      onClick={() => {
+                        setSelectedIdx(i);
+                        setPickerOpen(false);
+                      }}
+                    >
+                      <span className="tc-landing__picker-name">
+                        {v.name || v.mountPoint}
+                      </span>
+                      <span className="tc-landing__picker-size">
+                        {fmtBytes(v.totalBytes)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
+
+          <button type="button" className="tc-landing__scan-btn" onClick={startScan}>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--action-contrast)"
+              strokeWidth="2.2"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4.3-4.3" />
+            </svg>
+            {t("lens.landing.scan")}
+          </button>
         </div>
-      )}
 
-      {/* Empty state */}
-      {status === "idle" && !result && (
-        <div className="scanview__empty">
-          <div className="scanview__empty-art" aria-hidden>
-            {t("scan.empty.art")}
-          </div>
-          <p>{t("scan.empty.text")}</p>
-        </div>
-      )}
-
-      {/* Result state */}
-      {status === "done" && result && currentNode && (
-        <div className="scanview__result">
-          <div className="scanview__summary">
-            <div className="scanview__summary-total">
-              <span className="scanview__summary-num tabular">
-                {formatBytes(result.breakdown.totalBytes)}
-              </span>
-              <span className="scanview__summary-label">
-                {t("scan.result.scannedFiles", {
-                  count: result.breakdown.scannedFiles.toLocaleString(),
-                })}
-              </span>
-            </div>
-            <div className="seg" role="tablist" aria-label={t("scan.viz.modeLabel")}>
-              <button
-                role="tab"
-                aria-selected={viz === "treemap"}
-                className={`seg__btn${viz === "treemap" ? " is-active" : ""}`}
-                onClick={() => setViz("treemap")}
-              >
-                {t("scan.viz.treemap")}
-              </button>
-              <button
-                role="tab"
-                aria-selected={viz === "sunburst"}
-                className={`seg__btn${viz === "sunburst" ? " is-active" : ""}`}
-                onClick={() => setViz("sunburst")}
-              >
-                {t("scan.viz.sunburst")}
-              </button>
-            </div>
-          </div>
-
-          <CategoryBar
-            breakdown={result.breakdown}
-            tree={result.tree}
-            active={hoverCat}
-            onHover={setHoverCat}
-          />
-
-          <div className="scanview__viz-grid">
-            <div className="scanview__viz">
-              {viz === "treemap" ? (
-                <Treemap
-                  node={currentNode}
-                  onDrill={drillTo}
-                  onHoverCategory={setHoverCat}
-                />
-              ) : (
-                <Sunburst
-                  node={currentNode}
-                  onDrill={drillTo}
-                  onHoverCategory={setHoverCat}
-                />
-              )}
-            </div>
-            <FileTree
-              root={result.tree}
-              current={currentNode}
-              trail={trail}
-              onDrill={drillTo}
-              onNavigate={navigateTo}
-            />
-          </div>
-
-          {currentNode.truncatedChildren > 0 && (
-            <p className="scanview__truncated">
-              {t("scan.result.truncated", {
-                count: currentNode.truncatedChildren,
-                pct: formatPercent(truncatedPct),
-              })}
-            </p>
-          )}
-        </div>
-      )}
-    </section>
+        <button type="button" className="tc-landing__alt" onClick={pickFolder}>
+          {t("lens.landing.pickFolder")}
+        </button>
+      </div>
+    </div>
   );
 }

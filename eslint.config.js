@@ -17,6 +17,7 @@ export default tseslint.config(
       "coverage/**",
       ".claude/**",
       "proposal/**",
+      "tests/**",
       "*.config.{ts,js,mjs,cjs}",
     ],
   },
