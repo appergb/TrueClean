@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TrueClean — AI 驱动的磁盘清理专家 · TRAE AI 创造力大赛报名</title>
+<style>
+  /* ===== Design tokens (与 TrueClean 桌面应用一致) ===== */
+  :root {
+    --accent: oklch(64% 0.15 195);
+    --accent-strong: oklch(56% 0.16 195);
+    --accent-soft: oklch(95% 0.04 195);
+    --accent-contrast: oklch(99% 0 0);
+    --good: oklch(66% 0.17 150);
+    --warn: oklch(74% 0.16 75);
+    --danger: oklch(58% 0.2 25);
+
+    --bg: oklch(97.5% 0.005 240);
+    --bg-elevated: oklch(99.5% 0.003 240);
+    --surface: oklch(100% 0 0);
+    --surface-2: oklch(98% 0.004 240);
+    --surface-3: oklch(95.5% 0.006 240);
+    --border: oklch(90% 0.008 240);
+    --border-strong: oklch(84% 0.01 240);
+
+    --text: oklch(22% 0.01 250);
+    --text-muted: oklch(45% 0.01 250);
+    --text-faint: oklch(62% 0.01 250);
+    --text-on-accent: oklch(99% 0 0);
+
+    --shadow-sm: 0 1px 2px oklch(20% 0.02 250 / 0.06), 0 1px 1px oklch(20% 0.02 250 / 0.04);
+    --shadow-md: 0 4px 12px oklch(20% 0.02 250 / 0.08), 0 2px 4px oklch(20% 0.02 250 / 0.05);
+    --shadow-lg: 0 18px 48px oklch(20% 0.03 250 / 0.14), 0 6px 16px oklch(20% 0.02 250 / 0.08);
+
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+      "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif;
+    --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 22px;
+    --radius-full: 999px;
+
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  [data-theme="dark"] {
+    --accent: oklch(70% 0.15 195);
+    --accent-strong: oklch(76% 0.15 195);
+    --accent-soft: oklch(30% 0.05 195);
+
+    --bg: oklch(18% 0.012 255);
+    --bg-elevated: oklch(21% 0.014 255);
+    --surface: oklch(23% 0.014 255);
+    --surface-2: oklch(26% 0.015 255);
+    --surface-3: oklch(30% 0.016 255);
+    --border: oklch(32% 0.016 255);
+    --border-strong: oklch(40% 0.018 255);
+
+    --text: oklch(95% 0.005 255);
+    --text-muted: oklch(72% 0.01 255);
+    --text-faint: oklch(56% 0.012 255);
+
+    --shadow-sm: 0 1px 2px oklch(0% 0 0 / 0.3);
+    --shadow-md: 0 6px 16px oklch(0% 0 0 / 0.4);
+    --shadow-lg: 0 22px 56px oklch(0% 0 0 / 0.55);
+  }
+
+  /* ===== Reset ===== */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.3s var(--ease-out-expo), color 0.3s var(--ease-out-expo);
+  }
+  h1, h2, h3, h4 { margin: 0; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; }
+  p { margin: 0; }
+  a { color: var(--accent-strong); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* ===== Top bar ===== */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: saturate(180%) blur(20px);
+    background: var(--surface-glass, oklch(100% 0 0 / 0.72));
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; }
+  .brand-mark {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--good));
+    display: grid; place-items: center; color: #fff; font-size: 16px;
+    box-shadow: var(--shadow-sm);
+  }
+  .track-badge {
+    font-size: 0.75rem; font-weight: 600; padding: 4px 10px;
+    border-radius: var(--radius-full); background: var(--accent-soft);
+    color: var(--accent-strong); border: 1px solid var(--accent);
+  }
+  .theme-toggle {
+    background: var(--surface-2); border: 1px solid var(--border);
+    width: 38px; height: 38px; border-radius: var(--radius-full);
+    cursor: pointer; font-size: 16px; color: var(--text-muted);
+    transition: all 0.2s var(--ease-out-expo);
+  }
+  .theme-toggle:hover { color: var(--accent-strong); border-color: var(--accent); }
+
+  /* ===== Hero ===== */
+  .hero {
+    position: relative; overflow: hidden;
+    padding: 96px 0 80px;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, var(--accent-soft), transparent 60%),
+      radial-gradient(800px 400px at 10% 110%, oklch(95% 0.05 150 / 0.6), transparent 60%),
+      var(--bg);
+  }
+  [data-theme="dark"] .hero {
+    background:
+      radial-gradient(1200px 600px at 80% -10%, oklch(30% 0.05 195 / 0.5), transparent 60%),
+      radial-gradient(800px 400px at 10% 110%, oklch(25% 0.05 150 / 0.4), transparent 60%),
+      var(--bg);
+  }
+  .hero-grid {
+    display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 56px; align-items: center;
+  }
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 0.8rem; font-weight: 600; color: var(--accent-strong);
+    background: var(--accent-soft); padding: 6px 14px; border-radius: var(--radius-full);
+    border: 1px solid var(--accent); margin-bottom: 24px;
+  }
+  .hero-eyebrow::before { content: "🧹"; }
+  .hero h1 {
+    font-size: clamp(2.4rem, 1.4rem + 4vw, 4rem);
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, var(--text) 0%, var(--accent-strong) 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero-tagline { font-size: 1.2rem; color: var(--text-muted); margin-bottom: 16px; font-weight: 500; }
+  .hero-desc { font-size: 1rem; color: var(--text-muted); margin-bottom: 32px; max-width: 540px; }
+  .hero-cta { display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 22px; border-radius: var(--radius-md); font-weight: 600; font-size: 0.95rem;
+    cursor: pointer; border: 1px solid transparent; transition: all 0.2s var(--ease-out-expo);
+  }
+  .btn-primary { background: var(--accent); color: var(--text-on-accent); box-shadow: var(--shadow-md); }
+  .btn-primary:hover { background: var(--accent-strong); transform: translateY(-1px); }
+  .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent-strong); }
+
+  .hero-stats { display: flex; gap: 32px; margin-top: 40px; }
+  .stat-num { font-size: 1.6rem; font-weight: 700; color: var(--accent-strong); }
+  .stat-label { font-size: 0.8rem; color: var(--text-faint); }
+
+  /* Hero visual: mock app window */
+  .mock-window {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); overflow: hidden;
+    transform: perspective(1200px) rotateY(-6deg) rotateX(2deg);
+    transition: transform 0.5s var(--ease-out-expo);
+  }
+  .mock-window:hover { transform: perspective(1200px) rotateY(-2deg) rotateX(1deg); }
+  .mock-titlebar {
+    display: flex; gap: 6px; padding: 12px 16px; background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .mock-dot { width: 12px; height: 12px; border-radius: 50%; }
+  .mock-dot.r { background: oklch(72% 0.18 25); }
+  .mock-dot.y { background: oklch(80% 0.17 85); }
+  .mock-dot.g { background: oklch(75% 0.17 150); }
+  .mock-body { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .mock-card {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 14px;
+  }
+  .mock-card .label { font-size: 0.7rem; color: var(--text-faint); margin-bottom: 6px; }
+  .mock-card .value { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+  .mock-bar { height: 6px; border-radius: 3px; background: var(--surface-3); margin-top: 8px; overflow: hidden; }
+  .mock-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--good)); }
+  .mock-treemap {
+    grid-column: 1 / -1; height: 120px; border-radius: var(--radius-md);
+    display: grid; grid-template-columns: 1.4fr 1fr 0.8fr; grid-template-rows: 1fr 1fr; gap: 3px;
+  }
+  .mock-treemap > div { border-radius: 4px; }
+  .mock-agent {
+    grid-column: 1 / -1; background: var(--accent-soft); border: 1px solid var(--accent);
+    border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text);
+  }
+  .mock-agent b { color: var(--accent-strong); }
+
+  /* ===== Section ===== */
+  section { padding: 80px 0; }
+  .section-head { text-align: center; max-width: 720px; margin: 0 auto 56px; }
+  .section-eyebrow {
+    font-size: 0.78rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent-strong); margin-bottom: 14px;
+  }
+  .section-title { font-size: clamp(1.8rem, 1.2rem + 2vw, 2.6rem); margin-bottom: 16px; }
+  .section-sub { color: var(--text-muted); font-size: 1.05rem; }
+
+  /* ===== Pain points ===== */
+  .pain-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .pain-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 28px; box-shadow: var(--shadow-sm); transition: all 0.3s var(--ease-out-expo);
+  }
+  .pain-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); border-color: var(--accent); }
+  .pain-icon {
+    width: 44px; height: 44px; border-radius: var(--radius-md); display: grid; place-items: center;
+    font-size: 22px; margin-bottom: 16px;
+  }
+  .pain-icon.danger { background: oklch(58% 0.2 25 / 0.12); }
+  .pain-icon.warn { background: oklch(74% 0.16 75 / 0.15); }
+  .pain-icon.faint { background: var(--surface-3); }
+  .pain-card h3 { font-size: 1.15rem; margin-bottom: 10px; }
+  .pain-card p { color: var(--text-muted); font-size: 0.95rem; }
+
+  /* ===== Three pillars ===== */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .pillar {
+    position: relative; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-xl); padding: 36px 28px; overflow: hidden;
+    transition: all 0.3s var(--ease-out-expo);
+  }
+  .pillar::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--good));
+  }
+  .pillar:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); }
+  .pillar-num {
+    font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-strong);
+    font-weight: 600; margin-bottom: 12px;
+  }
+  .pillar h3 { font-size: 1.4rem; margin-bottom: 12px; }
+  .pillar p { color: var(--text-muted); margin-bottom: 18px; }
+  .pillar ul { list-style: none; padding: 0; margin: 0; }
+  .pillar li { font-size: 0.9rem; color: var(--text-muted); padding: 6px 0 6px 22px; position: relative; }
+  .pillar li::before { content: "✓"; position: absolute; left: 0; color: var(--good); font-weight: 700; }
+
+  /* ===== Feature grid ===== */
+  .feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .feature {
+    display: flex; gap: 18px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 24px; transition: all 0.25s var(--ease-out-expo);
+  }
+  .feature:hover { border-color: var(--accent); box-shadow: var(--shadow-md); }
+  .feature-emoji {
+    flex-shrink: 0; width: 48px; height: 48px; border-radius: var(--radius-md);
+    background: var(--accent-soft); display: grid; place-items: center; font-size: 24px;
+  }
+  .feature h4 { font-size: 1.1rem; margin-bottom: 6px; }
+  .feature p { color: var(--text-muted); font-size: 0.92rem; }
+
+  /* ===== AI highlight ===== */
+  .ai-highlight {
+    background:
+      radial-gradient(800px 400px at 90% 50%, var(--accent-soft), transparent 70%),
+      var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius-xl);
+    padding: 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center;
+  }
+  .ai-tag {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600;
+    color: var(--accent-strong); background: var(--accent-soft); padding: 5px 12px;
+    border-radius: var(--radius-full); margin-bottom: 18px;
+  }
+  .ai-highlight h2 { font-size: 1.8rem; margin-bottom: 16px; }
+  .ai-highlight p { color: var(--text-muted); margin-bottom: 20px; }
+  .ai-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ai-tool {
+    font-family: var(--font-mono); font-size: 0.78rem; padding: 5px 10px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text-muted);
+  }
+  .ai-chat {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 20px; box-shadow: var(--shadow-md);
+  }
+  .chat-msg { margin-bottom: 14px; }
+  .chat-msg:last-child { margin-bottom: 0; }
+  .chat-role { font-size: 0.72rem; font-weight: 600; color: var(--text-faint); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .chat-role.ai { color: var(--accent-strong); }
+  .chat-bubble {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 10px 14px; font-size: 0.88rem; color: var(--text);
+  }
+  .chat-bubble.ai { border-color: var(--accent); background: var(--accent-soft); }
+  .chat-bubble .group { font-weight: 600; }
+  .chat-bubble .group.safe { color: var(--good); }
+  .chat-bubble .group.review { color: var(--warn); }
+  .chat-bubble .group.danger { color: var(--danger); }
+
+  /* ===== Users ===== */
+  .user-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .user-card {
+    text-align: center; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 28px 20px; transition: all 0.25s var(--ease-out-expo);
+  }
+  .user-card:hover { transform: translateY(-4px); border-color: var(--accent); }
+  .user-emoji { font-size: 36px; margin-bottom: 12px; }
+  .user-card h4 { font-size: 1rem; margin-bottom: 6px; }
+  .user-card p { font-size: 0.82rem; color: var(--text-muted); }
+
+  /* ===== Value ===== */
+  .value-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .value-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 32px 28px; position: relative; overflow: hidden;
+  }
+  .value-card::after {
+    content: ""; position: absolute; bottom: -40px; right: -40px; width: 120px; height: 120px;
+    border-radius: 50%; background: var(--accent-soft); opacity: 0.6;
+  }
+  .value-card h3 { font-size: 1.3rem; margin-bottom: 12px; position: relative; z-index: 1; }
+  .value-card p { color: var(--text-muted); position: relative; z-index: 1; font-size: 0.95rem; }
+  .value-emoji { font-size: 28px; margin-bottom: 14px; display: block; position: relative; z-index: 1; }
+
+  /* ===== Tech ===== */
+  .tech-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl);
+    padding: 40px; box-shadow: var(--shadow-sm);
+  }
+  .tech-layers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .tech-layer h4 {
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint);
+    margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  }
+  .tech-list { list-style: none; padding: 0; margin: 0; }
+  .tech-list li { padding: 6px 0; font-size: 0.92rem; }
+  .tech-list li b { color: var(--text); }
+  .tech-list li span { color: var(--text-muted); }
+
+  /* ===== Safety ===== */
+  .safety-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .safety-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 28px; border-left: 4px solid;
+  }
+  .safety-card.safe { border-left-color: var(--good); }
+  .safety-card.review { border-left-color: var(--warn); }
+  .safety-card.danger { border-left-color: var(--danger); }
+  .safety-card.lock { border-left-color: var(--accent); }
+  .safety-card h4 { font-size: 1.1rem; margin-bottom: 10px; }
+  .safety-card p { color: var(--text-muted); font-size: 0.92rem; }
+
+  /* ===== Roadmap ===== */
+  .roadmap { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .roadmap-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 28px;
+  }
+  .roadmap-card.done { border-color: var(--good); }
+  .roadmap-card.todo { border-color: var(--border-strong); }
+  .roadmap-status {
+    display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 3px 10px;
+    border-radius: var(--radius-full); margin-bottom: 14px;
+  }
+  .roadmap-card.done .roadmap-status { background: oklch(66% 0.17 150 / 0.15); color: var(--good); }
+  .roadmap-card.todo .roadmap-status { background: var(--surface-3); color: var(--text-faint); }
+  .roadmap-card h4 { font-size: 1.1rem; margin-bottom: 12px; }
+  .roadmap-card ul { list-style: none; padding: 0; margin: 0; }
+  .roadmap-card li { font-size: 0.9rem; color: var(--text-muted); padding: 5px 0 5px 22px; position: relative; }
+  .roadmap-card.done li::before { content: "✓"; position: absolute; left: 0; color: var(--good); font-weight: 700; }
+  .roadmap-card.todo li::before { content: "○"; position: absolute; left: 0; color: var(--text-faint); }
+
+  /* ===== Footer ===== */
+  footer {
+    background: var(--bg-elevated); border-top: 1px solid var(--border);
+    padding: 56px 0 40px; margin-top: 40px;
+  }
+  .footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 40px; margin-bottom: 32px; }
+  .footer-brand h3 { font-size: 1.2rem; margin-bottom: 10px; }
+  .footer-brand p { color: var(--text-muted); font-size: 0.9rem; max-width: 360px; }
+  .footer-col h4 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 14px; }
+  .footer-col p { font-size: 0.9rem; color: var(--text-muted); padding: 4px 0; }
+  .footer-bottom {
+    border-top: 1px solid var(--border); padding-top: 24px;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+    font-size: 0.82rem; color: var(--text-faint);
+  }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 880px) {
+    .hero-grid, .ai-highlight { grid-template-columns: 1fr; gap: 40px; }
+    .pain-grid, .pillars, .value-grid, .tech-layers { grid-template-columns: 1fr; }
+    .feature-grid, .safety-grid, .roadmap { grid-template-columns: 1fr; }
+    .user-grid { grid-template-columns: repeat(2, 1fr); }
+    .mock-window { transform: none; }
+    .hero { padding: 64px 0 48px; }
+    section { padding: 56px 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== Top bar ===== -->
+<header class="topbar">
+  <div class="container topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">🧹</div>
+      <span>TrueClean</span>
+      <span class="track-badge">学习工作赛道</span>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="切换主题">🌙</button>
+  </div>
+</header>
+
+<!-- ===== Hero ===== -->
+<section class="hero">
+  <div class="container hero-grid">
+    <div>
+      <span class="hero-eyebrow">TRAE AI 创造力大赛 · 创意提案</span>
+      <h1>TrueClean<br/>AI 驱动的磁盘清理专家</h1>
+      <p class="hero-tagline">看清楚 · 清得安全 · 让 AI 帮你判断</p>
+      <p class="hero-desc">
+        跨平台磁盘清理 + AI Agent 桌面应用。扫描磁盘占用 → 可视化分类占比 → 识别系统/缓存数据 →
+        让 AI 助手基于<strong>真实扫描数据</strong>分析并（在你确认后）安全清理。
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#features">查看核心功能</a>
+        <a class="btn btn-ghost" href="#ai">了解 AI Agent</a>
+      </div>
+      <div class="hero-stats">
+        <div><div class="stat-num">11</div><div class="stat-label">文件分类</div></div>
+        <div><div class="stat-num">9</div><div class="stat-label">AI 工具</div></div>
+        <div><div class="stat-num">3</div><div class="stat-label">平台支持</div></div>
+        <div><div class="stat-num">~10MB</div><div class="stat-label">安装体积</div></div>
+      </div>
+    </div>
+    <div class="mock-window">
+      <div class="mock-titlebar">
+        <span class="mock-dot r"></span><span class="mock-dot y"></span><span class="mock-dot g"></span>
+      </div>
+      <div class="mock-body">
+        <div class="mock-card">
+          <div class="label">Macintosh HD</div>
+          <div class="value">412 GB / 512 GB</div>
+          <div class="mock-bar"><span style="width:80%"></span></div>
+        </div>
+        <div class="mock-card">
+          <div class="label">可立即清理</div>
+          <div class="value" style="color: var(--good)">18.6 GB</div>
+          <div class="mock-bar"><span style="width:35%; background: var(--good)"></span></div>
+        </div>
+        <div class="mock-treemap">
+          <div style="background: var(--accent)"></div>
+          <div style="background: oklch(74% 0.15 75)"></div>
+          <div style="background: oklch(60% 0.14 300)"></div>
+          <div style="background: oklch(68% 0.16 25)"></div>
+          <div style="background: oklch(72% 0.11 110)"></div>
+        </div>
+        <div class="mock-agent">
+          <b>AI Agent：</b>已扫描完成。发现 <b>18.6 GB</b> 可立即清理（缓存/日志/临时文件），
+          另有 <b>3.2 GB</b> 大文件建议你复核。是否执行清理？
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Pain points ===== -->
+<section id="pain">
+  <div class="container">
+    <div class="section-head">
+      <div class="section-eyebrow">痛点</div>
+      <h2 class="section-title">硬盘满了，你遇到过这些麻烦吗？</h2>
+      <p class="section-sub">三个被现有清理工具长期忽视的真实痛点。</p>
+    </div>
+    <div class="pain-grid">
+      <div class="pain-card">
+        <div class="pain-icon danger">😱</div>
+        <h3>不敢删</h3>
+        <p>"一键清理"是黑盒，不知道它删了什么；怕误删系统文件导致电脑出问题，干脆不动。</p>
+      </div>
+      <div class="pain-card">
+        <div class="pain-icon warn">🤷</div>
+        <h3>看不懂</h3>
+        <p>文件列表密密麻麻，不知道哪些是缓存能删、哪些是重要数据；找大文件要翻半天文件夹。</p>
+      </div>
+      <div class="pain-card">
+        <div class="pain-icon faint">🤖</div>
+        <h3>没人帮判断</h3>
+        <p>现有工具只会"扫"不会"想"，扫完一堆数据丢给你，到底该删哪些还得自己逐项研究。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Three pillars ===== -->
+<section id="pillars" style="background: var(--bg-elevated);">
+  <div class="container">
+    <div class="section-head">
+      <div class="section-eyebrow">核心能力</div>
+      <h2 class="section-title">三件事，解决"满、乱、怕"</h2>
+      <p class="section-sub">看清楚空间被谁吃了，清得安全有兜底，让 AI 帮你判断该删什么。</p>
+    </div>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="pillar-num">01 / 看清楚</div>
+        <h3>可视化磁盘占用</h3>
+        <p>并行递归扫描整块硬盘或任意目录，把占用按 11 个类别拆开，两种可视化 + 文件树下钻。</p>
+        <ul>
+          <li>Treemap 矩形树图 + Sunburst 旭日图</li>
+          <li>11 类分类占比（系统/应用/开发/缓存/日志…）</li>
+          <li>逐层下钻到最大子目录</li>
+          <li>实时进度，可随时取消</li>
+        </ul>
+      </div>
+      <div class="pillar">
+        <div class="pillar-num">02 / 清得安全</div>
+        <h3>分级清理 + 回收站兜底</h3>
+        <p>自动识别真正的"垃圾"，区分"绝对安全可删"和"需你确认"，删除默认进回收站。</p>
+        <ul>
+          <li>用户/系统/应用缓存、日志、临时文件</li>
+          <li>浏览器缓存、开发缓存（DerivedData 等）</li>
+          <li>包管理器缓存（npm/cargo/pip/gradle）</li>
+          <li>默认走回收站，可恢复</li>
+        </ul>
+      </div>
+      <div class="pillar">
+        <div class="pillar-num">03 / AI 帮判断</div>
+        <h3>真正会用工具的 AI 助手</h3>
+        <p>内置 AI Agent 面板，能调用扫描/清理工具基于真实数据给建议，绝不编造路径和体积。</p>
+        <ul>
+          <li>多模型可选（Claude/OpenAI/Ollama）</li>
+          <li>工具调用 + 流式输出可视化</li>
+          <li>按"可立即清理/建议复核/不要动"分组</li>
+          <li>给出预计释放空间与风险等级</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Features ===== -->
+<section id="features">
+  <div class="container">
+    <div class="section-head">
+      <div class="section-eyebrow">功能详解</div>
+      <h2 class="section-title">不止清理，是一整套磁盘健康方案</h2>
+      <p class="section-sub">从扫描、清理、卸载到启动项管理，覆盖磁盘维护全流程。</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="feature-emoji">🗂️</div>
+        <div>
+          <h4>概览 Overview</h4>
+          <p>每个磁盘卷的使用率环形图、总容量/已用/可用空间，一键开始扫描的醒目入口。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-emoji">🔍</div>
+        <div>
+          <h4>磁盘扫描与可视化</h4>
+          <p>Rust 并行扫描内核，处理大量文件依然快；Treemap + Sunburst 双图，悬停看详情、点击下钻。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-emoji">🧽</div>
+        <div>
+          <h4>系统垃圾清理</h4>
+          <p>分组扫描缓存/日志/临时/浏览器缓存/开发缓存/回收站，组级/项级勾选，底部汇总释放空间。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-emoji">📦</div>
+        <div>
+          <h4>大文件查找</h4>
+          <p>按"最小大小 + 至少多少天未修改"筛出体积大且陈旧的文件，按大小排序，可勾选删除。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-emoji">👯</div>
+        <div>
+          <h4>重复文件查找</h4>
+          <p>基于 blake3 内容哈希精确去重（先按大小分桶再哈希），按组展示，每组保留 1 个、其余可删。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-emoji">🗑️</div>
+        <div>
+          <h4>应用卸载</h4>
+          <p>列出已安装应用及体积/最近使用时间，卸载时连带清理残留（缓存/偏好/Application Support/日志）。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-emoji">⚡</div>
+        <div>
+          <h4>启动项管理</h4>
+          <p>列出开机自启动项（登录项/启动代理/服务）及启用状态，一键启停，加快开机。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-emoji">⚙️</div>
+        <div>
+          <h4>设置与多模型</h4>
+          <p>Provider 切换（Claude/OpenAI/Ollama）、模型选择、API Key 本地存储、回收站默认开关。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== AI highlight ===== -->
+<section id="ai" style="background: var(--bg-elevated);">
+  <div class="container">
+    <div class="ai-highlight">
+      <div>
+        <span class="ai-tag">🤖 核心亮点</span>
+        <h2>AI Agent：真正会用工具的助手</h2>
+        <p>
+          不是空谈的聊天机器人。TrueClean 的 AI 助手能<strong>真正调用</strong>下面的扫描/清理能力，
+          基于真实扫描数据给建议，绝不编造路径和体积。它输出结构化建议：按"可立即清理/建议复核/不要动"分组，
+          给出每项的预计释放空间与风险等级，并在你确认后执行清理。
+        </p>
+        <div class="ai-tools">
+          <span class="ai-tool">list_volumes</span>
+          <span class="ai-tool">scan_directory</span>
+          <span class="ai-tool">scan_junk</span>
+          <span class="ai-tool">find_large_old_files</span>
+          <span class="ai-tool">find_duplicates</span>
+          <span class="ai-tool">list_applications</span>
+          <span class="ai-tool">list_startup_items</span>
+          <span class="ai-tool">clean_paths</span>
+          <span class="ai-tool">empty_trash</span>
+        </div>
+      </div>
+      <div class="ai-chat">
+        <div class="chat-msg">
+          <div class="chat-role">你</div>
+          <div class="chat-bubble">帮我看看 Mac 还能清理多少空间？</div>
+        </div>
+        <div class="chat-msg">
+          <div class="chat-role ai">AI Agent · 已调用 scan_junk</div>
+          <div class="chat-bubble ai">
+            <p style="margin-bottom:10px;">扫描完成，结果如下：</p>
+            <p><span class="group safe">【可立即清理】</span> 缓存/日志/临时文件，合计 <b>18.6 GB</b>，绝对安全。</p>
+            <p><span class="group review">【建议复核】</span> 3 个大文件（旧视频/安装包），合计 <b>3.2 GB</b>，需你确认。</p>
+            <p><span class="group danger">【不要动】</span> 已主动排除 /System、/usr 等系统路径。</p>
+            <p style="margin-top:10px;">预计可释放 <b>21.8 GB</b>。确认后我帮你把【可立即清理】移入回收站？</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Target users ===== -->
+<section id="users">
+  <div class="container">
+    <div class="section-head">
+      <div class="section-eyebrow">目标用户</div>
+      <h2 class="section-title">谁最需要 TrueClean？</h2>
+      <p class="section-sub">磁盘空间紧张、且存有大量项目/缓存/素材的人。</p>
+    </div>
+    <div class="user-grid">
+      <div class="user-card">
+        <div class="user-emoji">👨‍💻</div>
+        <h4>开发者</h4>
+        <p>node_modules、DerivedData、包管理器缓存堆积如山</p>
+      </div>
+      <div class="user-card">
+        <div class="user-emoji">🎨</div>
+        <h4>设计师</h4>
+        <p>设计稿、素材、PSD 临时文件占用大量空间</p>
+      </div>
+      <div class="user-card">
+        <div class="user-emoji">🎬</div>
+        <h4>内容创作者</h4>
+        <p>视频/音频工程文件巨大，旧项目舍不得删又占地方</p>
+      </div>
+      <div class="user-card">
+        <div class="user-emoji">💼</div>
+        <h4>办公人群</h4>
+        <p>电脑变卡、装不下新软件，想清理又怕删错</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Value ===== -->
+<section id="value" style="background: var(--bg-elevated);">
+  <div class="container">
+    <div class="section-head">
+      <div class="section-eyebrow">价值与意义</div>
+      <h2 class="section-title">为什么 TrueClean 值得做？</h2>
+      <p class="section-sub">从效率提升与社会价值两个角度，说明这个创意的价值。</p>
+    </div>
+    <div class="value-grid">
+      <div class="value-card">
+        <span class="value-emoji">⚡</span>
+        <h3>效率提升</h3>
+        <p>AI Agent 基于真实扫描数据给"可立即清理/建议复核/不要动"分组建议，省去人工逐项判断；可视化让定位大文件从"翻文件夹"变"一眼看穿"。</p>
+      </div>
+      <div class="value-card">
+        <span class="value-emoji">🛡️</span>
+        <h3>社会价值</h3>
+        <p>默认走回收站 + 安全红线，降低误删系统文件导致电脑故障的风险，让普通用户也敢自己维护电脑，减少因"不敢清理"而提前换机造成的电子浪费。</p>
+      </div>
+      <div class="value-card">
+        <span class="value-emoji">🌱</span>
+        <h3>商业潜力</h3>
+        <p>类 CleanMyMac 已验证的市场需求 + AI Agent 差异化卖点；跨平台（macOS/Windows/Linux）覆盖更广；本地优先、隐私友好（API Key 不上传）契合当下趋势。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Tech ===== -->
+<section id="tech">
+  <div class="container">
+    <div class="section-head">
+      <div class="section-eyebrow">技术架构</div>
+      <h2 class="section-title">小体积、原生性能、隐私优先</h2>
+      <p class="section-sub">Tauri 2 + React + Rust，安装包约 10MB，原生性能，安全可控。</p>
+    </div>
+    <div class="tech-wrap">
+      <div class="tech-layers">
+        <div class="tech-layer">
+          <h4>桌面框架 / 后端</h4>
+          <ul class="tech-list">
+            <li><b>Tauri 2</b> <span>— 体积小 ~10MB、原生性能、安全</span></li>
+            <li><b>Rust</b> <span>— 并行扫描内核</span></li>
+            <li><b>rayon / jwalk</b> <span>— 并行递归遍历</span></li>
+            <li><b>blake3</b> <span>— 内容哈希去重</span></li>
+            <li><b>sysinfo / trash</b> <span>— 系统信息 / 安全删除</span></li>
+          </ul>
+        </div>
+        <div class="tech-layer">
+          <h4>前端 / 可视化</h4>
+          <ul class="tech-list">
+            <li><b>React 18 + TypeScript</b> <span>— UI 层</span></li>
+            <li><b>Vite 6</b> <span>— 构建工具</span></li>
+            <li><b>zustand</b> <span>— 状态管理</span></li>
+            <li><b>d3-hierarchy</b> <span>— Treemap / Sunburst</span></li>
+            <li><b>OKLCH 设计令牌</b> <span>— 深浅双主题</span></li>
+          </ul>
+        </div>
+        <div class="tech-layer">
+          <h4>AI Agent</h4>
+          <ul class="tech-list">
+            <li><b>多 Provider</b> <span>— Claude / OpenAI / Ollama</span></li>
+            <li><b>工具调用</b> <span>— 9 个工具，中立 schema</span></li>
+            <li><b>流式输出</b> <span>— 实时响应</span></li>
+            <li><b>强力中文提示词</b> <span>— 安全红线 + 结构化输出</span></li>
+            <li><b>API Key 本地存储</b> <span>— 不上传</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Safety ===== -->
+<section id="safety" style="background: var(--bg-elevated);">
+  <div class="container">
+    <div class="section-head">
+      <div class="section-eyebrow">安全设计</div>
+      <h2 class="section-title">安全第一，省空间第二</h2>
+      <p class="section-sub">涉及删除的操作，每一步都把"安全"放在"省空间"之前。</p>
+    </div>
+    <div class="safety-grid">
+      <div class="safety-card safe">
+        <h4>✓ 绝对安全可删</h4>
+        <p>用户缓存、系统缓存、应用缓存、各类日志、临时文件、浏览器缓存、开发缓存、回收站内容。删除后系统会自动重建，不丢失用户数据。</p>
+      </div>
+      <div class="safety-card review">
+        <h4>! 需用户确认</h4>
+        <p>文档、媒体（照片/视频/音乐）、下载目录大文件、压缩包、应用程序本身、用户主目录文档区内容。删除前必须逐项征求确认。</p>
+      </div>
+      <div class="safety-card danger">
+        <h4>✕ 绝不要动</h4>
+        <p>macOS /System、/usr；Windows C:\Windows、System32；Linux /、/boot、/etc、/usr 等系统关键路径。AI 提示词设有安全红线，绝不建议删除。</p>
+      </div>
+      <div class="safety-card lock">
+        <h4>🔒 兜底机制</h4>
+        <p>删除默认走回收站（可恢复）；永久删除需显式选择；所有破坏性操作 UI 上需二次确认；API Key 仅保存在本地配置文件，不上传。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Roadmap ===== -->
+<section id="roadmap">
+  <div class="container">
+    <div class="section-head">
+      <div class="section-eyebrow">路线图</div>
+      <h2 class="section-title">已完成与下一步</h2>
+      <p class="section-sub">首版可编译运行，核心扫描内核带单元测试；多平台打磨与体验优化进行中。</p>
+    </div>
+    <div class="roadmap">
+      <div class="roadmap-card done">
+        <span class="roadmap-status">已完成 · 首版</span>
+        <h4>核心能力落地</h4>
+        <ul>
+          <li>跨平台项目骨架（Tauri 2 + React + TS），前后端均可编译</li>
+          <li>并行磁盘扫描内核 + 分类 + 占比统计（含单元测试）</li>
+          <li>Treemap / Sunburst / 分类条 / 文件树可视化</li>
+          <li>系统垃圾、大文件、重复文件、应用卸载、启动项后端与面板</li>
+          <li>AI Agent：多 Provider + 工具调用 + 流式 + 强力提示词</li>
+          <li>设置（Provider / Model / Key / 回收站默认）</li>
+        </ul>
+      </div>
+      <div class="roadmap-card todo">
+        <span class="roadmap-status">进行中 / 待完善</span>
+        <h4>打磨与体验优化</h4>
+        <ul>
+          <li>Windows / Linux 清理路径表、卸载残留、启动项管理打磨</li>
+          <li>真机端到端点测与 UI 细节、空态 / 错误态打磨</li>
+          <li>扫描结果缓存与增量扫描、超大目录性能优化</li>
+          <li>清理前的安全快照 / 撤销</li>
+          <li>国际化（中 / 英）完善</li>
+          <li>应用图标与品牌视觉、打包签名</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Footer ===== -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <h3>🧹 TrueClean</h3>
+        <p>跨平台磁盘清理 + AI Agent 桌面应用。看清楚 · 清得安全 · 让 AI 帮你判断。</p>
+      </div>
+      <div class="footer-col">
+        <h4>参赛信息</h4>
+        <p>赛事：TRAE AI 创造力大赛</p>
+        <p>赛道：学习工作</p>
+        <p>创意名称：TrueClean</p>
+        <p>产品形态：桌面应用</p>
+      </div>
+      <div class="footer-col">
+        <h4>技术栈</h4>
+        <p>Tauri 2 + React 18</p>
+        <p>Rust + TypeScript</p>
+        <p>AI: Claude / OpenAI / Ollama</p>
+        <p>平台: macOS / Windows / Linux</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>MIT License · 本提案由 TRAE Work 协助生成</span>
+      <span>报名阶段：2026.06.16 – 2026.07.15</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // 主题切换
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const saved = localStorage.getItem('tc-theme');
+  if (saved) { root.dataset.theme = saved; toggle.textContent = saved === 'dark' ? '☀️' : '🌙'; }
+  toggle.addEventListener('click', () => {
+    const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    toggle.textContent = next === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem('tc-theme', next);
+  });
+
+  // 滚动渐入
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.style.opacity = '1';
+        e.target.style.transform = 'translateY(0)';
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('section .pain-card, .pillar, .feature, .user-card, .value-card, .safety-card, .roadmap-card').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(20px)';
+    el.style.transition = 'opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1)';
+    io.observe(el);
+  });
+</script>
+
+</body>
+</html>
