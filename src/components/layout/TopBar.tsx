@@ -1,8 +1,11 @@
 import { IconButton } from "../ui/IconButton";
 import { Button } from "../ui/Button";
+import { Segmented } from "../ui/Segmented";
 import type { ViewId } from "./Sidebar";
-import { NAV_LABELS } from "./Sidebar";
+import { NAV_LABEL_KEYS } from "./Sidebar";
 import type { Theme } from "../../hooks/useTheme";
+import { useI18n } from "../../i18n";
+import type { Locale } from "../../i18n";
 
 interface TopBarProps {
   current: ViewId;
@@ -38,19 +41,30 @@ export function TopBar({
   agentOpen,
   onToggleAgent,
 }: TopBarProps) {
+  const { t, locale, setLocale } = useI18n();
   return (
     <header className="tc-topbar">
       <div className="tc-topbar__heading">
-        <span className="tc-topbar__crumb">TrueClean</span>
+        <span className="tc-topbar__crumb">{t("shell.topbar.crumb")}</span>
         <span className="tc-topbar__sep" aria-hidden="true">
           /
         </span>
-        <h1 className="tc-topbar__title">{NAV_LABELS[current]}</h1>
+        <h1 className="tc-topbar__title">{t(NAV_LABEL_KEYS[current])}</h1>
       </div>
 
       <div className="tc-topbar__actions">
+        <Segmented<Locale>
+          size="sm"
+          ariaLabel={t("shell.topbar.language")}
+          value={locale}
+          onChange={setLocale}
+          options={[
+            { value: "zh", label: t("shell.topbar.langZh") },
+            { value: "en", label: t("shell.topbar.langEn") },
+          ]}
+        />
         <IconButton
-          label={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}
+          label={theme === "dark" ? t("shell.topbar.themeToLight") : t("shell.topbar.themeToDark")}
           icon={theme === "dark" ? SunIcon : MoonIcon}
           onClick={onToggleTheme}
         />
@@ -60,7 +74,7 @@ export function TopBar({
           onClick={onToggleAgent}
           aria-pressed={agentOpen}
         >
-          AI 助手
+          {t("shell.topbar.aiAssistant")}
         </Button>
       </div>
     </header>

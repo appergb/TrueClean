@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useI18n } from "../../i18n";
 
 export type ViewId =
   | "overview"
@@ -12,7 +13,7 @@ export type ViewId =
 
 interface NavItem {
   id: ViewId;
-  label: string;
+  labelKey: string;
   icon: ReactNode;
 }
 
@@ -36,7 +37,7 @@ const ico = (paths: ReactNode) => (
 const NAV: NavItem[] = [
   {
     id: "overview",
-    label: "概览",
+    labelKey: "shell.nav.overview",
     icon: ico(
       <>
         <rect x="3" y="3" width="7" height="9" rx="1.5" />
@@ -48,7 +49,7 @@ const NAV: NavItem[] = [
   },
   {
     id: "scan",
-    label: "扫描",
+    labelKey: "shell.nav.scan",
     icon: ico(
       <>
         <circle cx="11" cy="11" r="7" />
@@ -58,7 +59,7 @@ const NAV: NavItem[] = [
   },
   {
     id: "junk",
-    label: "系统垃圾",
+    labelKey: "shell.nav.junk",
     icon: ico(
       <>
         <path d="M3 6h18" />
@@ -69,7 +70,7 @@ const NAV: NavItem[] = [
   },
   {
     id: "large",
-    label: "大文件",
+    labelKey: "shell.nav.large",
     icon: ico(
       <>
         <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -79,7 +80,7 @@ const NAV: NavItem[] = [
   },
   {
     id: "duplicates",
-    label: "重复文件",
+    labelKey: "shell.nav.duplicates",
     icon: ico(
       <>
         <rect x="9" y="9" width="11" height="11" rx="2" />
@@ -89,7 +90,7 @@ const NAV: NavItem[] = [
   },
   {
     id: "apps",
-    label: "应用卸载",
+    labelKey: "shell.nav.apps",
     icon: ico(
       <>
         <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -101,7 +102,7 @@ const NAV: NavItem[] = [
   },
   {
     id: "startup",
-    label: "启动项",
+    labelKey: "shell.nav.startup",
     icon: ico(
       <>
         <path d="M12 3v9" />
@@ -111,7 +112,7 @@ const NAV: NavItem[] = [
   },
   {
     id: "settings",
-    label: "设置",
+    labelKey: "shell.nav.settings",
     icon: ico(
       <>
         <circle cx="12" cy="12" r="3" />
@@ -127,6 +128,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ current, onNavigate }: SidebarProps) {
+  const { t } = useI18n();
   return (
     <aside className="tc-sidebar">
       <div className="tc-sidebar__brand">
@@ -152,14 +154,15 @@ export function Sidebar({ current, onNavigate }: SidebarProps) {
           </svg>
         </span>
         <div className="tc-sidebar__wordmark">
-          <span className="tc-sidebar__name">TrueClean</span>
-          <span className="tc-sidebar__tag">磁盘清理 · AI 助手</span>
+          <span className="tc-sidebar__name">{t("shell.brand.name")}</span>
+          <span className="tc-sidebar__tag">{t("shell.brand.tag")}</span>
         </div>
       </div>
 
-      <nav className="tc-sidebar__nav" aria-label="主导航">
+      <nav className="tc-sidebar__nav" aria-label={t("shell.nav.label")}>
         {NAV.map((item) => {
           const active = item.id === current;
+          const label = t(item.labelKey);
           return (
             <button
               key={item.id}
@@ -169,7 +172,7 @@ export function Sidebar({ current, onNavigate }: SidebarProps) {
               onClick={() => onNavigate(item.id)}
             >
               <span className="tc-nav-item__icon">{item.icon}</span>
-              <span className="tc-nav-item__label">{item.label}</span>
+              <span className="tc-nav-item__label">{label}</span>
               {active && (
                 <span className="tc-nav-item__marker" aria-hidden="true" />
               )}
@@ -185,8 +188,9 @@ export function Sidebar({ current, onNavigate }: SidebarProps) {
   );
 }
 
-export const NAV_LABELS: Record<ViewId, string> = Object.fromEntries(
-  NAV.map((n) => [n.id, n.label]),
+/** Map each view to its i18n key — callers resolve via `t(key)`. */
+export const NAV_LABEL_KEYS: Record<ViewId, string> = Object.fromEntries(
+  NAV.map((n) => [n.id, n.labelKey]),
 ) as Record<ViewId, string>;
 
 export default Sidebar;

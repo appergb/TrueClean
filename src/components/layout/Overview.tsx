@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { getVolumes } from "../../lib/ipc";
-import type { VolumeInfo } from "../../lib/types";
+import type { VolumeInfo, AppSettings } from "../../lib/types";
 import { formatBytes } from "../../lib/format";
 import { SurfaceCard } from "../ui/SurfaceCard";
 import { ProgressRing } from "../ui/ProgressRing";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
+import { Onboarding } from "./Onboarding";
+import { useI18n } from "../../i18n";
+import { useSettingsStore } from "../../store/settingsStore";
 import type { ViewId } from "./Sidebar";
 
 interface OverviewProps {
@@ -32,18 +35,33 @@ function ringColor(ratio: number): string {
   return "var(--accent)";
 }
 
+/** Returns true when the configured provider has the credentials it needs. */
+function isAiConfigured(settings: AppSettings | null): boolean {
+  if (!settings) return true; // don't prompt before settings have loaded
+  switch (settings.provider) {
+    case "claude":
+      return settings.claudeApiKey.trim().length > 0;
+    case "openai":
+      return settings.openaiApiKey.trim().length > 0;
+    case "ollama":
+      return settings.ollamaBaseUrl.trim().length > 0;
+    default:
+      return true;
+  }
+}
+
 interface GuideCard {
   view: ViewId;
-  title: string;
-  desc: string;
+  titleKey: string;
+  descKey: string;
   icon: ReactNode;
 }
 
 const GUIDE_CARDS: GuideCard[] = [
   {
     view: "junk",
-    title: "系统垃圾",
-    desc: "清理缓存、日志、临时文件与废纸篓，安全释放空间。",
+    titleKey: "shell.overview.guideJunkTitle",
+    descKey: "shell.overview.guideJunkDesc",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />
@@ -52,8 +70,8 @@ const GUIDE_CARDS: GuideCard[] = [
   },
   {
     view: "large",
-    title: "大文件与旧文件",
-    desc: "找出占用空间最多、长期未使用的文件，按需复核处理。",
+    titleKey: "shell.overview.guideLargeTitle",
+    descKey: "shell.overview.guideLargeDesc",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6" />
@@ -62,8 +80,8 @@ const GUIDE_CARDS: GuideCard[] = [
   },
   {
     view: "duplicates",
-    title: "重复文件",
-    desc: "基于内容哈希识别重复副本，去重回收冗余空间。",
+    titleKey: "shell.overview.guideDupTitle",
+    descKey: "shell.overview.guideDupDesc",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="9" y="9" width="11" height="11" rx="2" />
@@ -73,8 +91,8 @@ const GUIDE_CARDS: GuideCard[] = [
   },
   {
     view: "apps",
-    title: "应用卸载",
-    desc: "彻底卸载应用并清除残留配置与缓存文件。",
+    titleKey: "shell.overview.guideAppsTitle",
+    descKey: "shell.overview.guideAppsDesc",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -87,7 +105,16 @@ const GUIDE_CARDS: GuideCard[] = [
 ];
 
 export function Overview({ onStartScan, onNavigate }: OverviewProps) {
+  const { t } = useI18n();
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const settings = useSettingsStore((s) => s.settings);
+  const settingsLoading = useSettingsStore((s) => s.loading);
+  const loadSettings = useSettingsStore((s) => s.load);
+
+  // Load settings once so we can detect a missing AI key.
+  useEffect(() => {
+    if (!settings && !settingsLoading) void loadSettings();
+  }, [settings, settingsLoading, loadSettings]);
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
@@ -98,31 +125,49 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
       const message =
         err && typeof err === "object" && "message" in err
           ? String((err as { message: unknown }).message)
-          : "无法读取磁盘信息";
+          : t("shell.overview.readVolumesFail");
       setState({ status: "error", message });
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  const showAiPrompt = !isAiConfigured(settings);
+
   return (
     <div className="tc-overview">
+      <Onboarding onStart={onStartScan} />
+
+      {showAiPrompt && (
+        <SurfaceCard elevation="sm" className="tc-ai-prompt" role="note">
+          <span className="tc-ai-prompt__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" />
+            </svg>
+          </span>
+          <div className="tc-ai-prompt__body">
+            <h3 className="tc-ai-prompt__title">{t("shell.aiKeyPrompt.title")}</h3>
+            <p className="tc-ai-prompt__desc">{t("shell.aiKeyPrompt.desc")}</p>
+          </div>
+          <Button variant="subtle" size="sm" onClick={() => onNavigate("settings")}>
+            {t("shell.aiKeyPrompt.action")}
+          </Button>
+        </SurfaceCard>
+      )}
+
       <section className="tc-hero">
         <div className="tc-hero__copy">
-          <p className="tc-hero__eyebrow">磁盘健康</p>
-          <h2 className="tc-hero__title">让你的磁盘保持清爽</h2>
-          <p className="tc-hero__lead">
-            一次扫描，看清空间去向。TrueClean 会分类统计磁盘占用，
-            找出可安全清理的垃圾，并让 AI 助手帮你做决策。
-          </p>
+          <p className="tc-hero__eyebrow">{t("shell.overview.heroEyebrow")}</p>
+          <h2 className="tc-hero__title">{t("shell.overview.heroTitle")}</h2>
+          <p className="tc-hero__lead">{t("shell.overview.heroLead")}</p>
           <div className="tc-hero__cta">
             <Button variant="primary" size="lg" onClick={onStartScan}>
-              开始扫描
+              {t("shell.overview.ctaScan")}
             </Button>
             <Button variant="ghost" size="lg" onClick={() => onNavigate("junk")}>
-              快速清理垃圾
+              {t("shell.overview.ctaJunk")}
             </Button>
           </div>
         </div>
@@ -131,10 +176,10 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
 
       <section className="tc-section">
         <header className="tc-section__head">
-          <h3 className="tc-section__title">磁盘卷</h3>
+          <h3 className="tc-section__title">{t("shell.overview.volumesTitle")}</h3>
           {state.status === "ready" && (
             <span className="tc-section__meta">
-              {state.volumes.length} 个磁盘
+              {t("shell.overview.volumesMeta", { count: state.volumes.length })}
             </span>
           )}
         </header>
@@ -157,11 +202,11 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
           <SurfaceCard elevation="sm">
             <EmptyState
               compact
-              title="读取磁盘信息失败"
+              title={t("shell.overview.readVolumesFail")}
               description={state.message}
               action={
                 <Button variant="subtle" onClick={() => void load()}>
-                  重试
+                  {t("shell.common.retry")}
                 </Button>
               }
             />
@@ -170,7 +215,7 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
 
         {state.status === "ready" && state.volumes.length === 0 && (
           <SurfaceCard elevation="sm">
-            <EmptyState compact title="未发现可用磁盘" />
+            <EmptyState compact title={t("shell.overview.noVolumes")} />
           </SurfaceCard>
         )}
 
@@ -204,7 +249,9 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
                     <div className="tc-vol-card__name" title={v.mountPoint}>
                       {v.name || v.mountPoint}
                       {v.isRemovable && (
-                        <span className="tc-vol-card__badge">可移动</span>
+                        <span className="tc-vol-card__badge">
+                          {t("shell.overview.volRemovable")}
+                        </span>
                       )}
                     </div>
                     <div className="tc-vol-card__bytes tabular">
@@ -212,11 +259,11 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
                         {formatBytes(v.usedBytes)}
                       </span>
                       <span className="tc-vol-card__total">
-                        / {formatBytes(v.totalBytes)}
+                        {t("shell.overview.volOf", { size: formatBytes(v.totalBytes) })}
                       </span>
                     </div>
                     <div className="tc-vol-card__free tabular">
-                      剩余 {formatBytes(v.availableBytes)} · {v.fileSystem}
+                      {t("shell.overview.volFree", { size: formatBytes(v.availableBytes) })} · {v.fileSystem}
                     </div>
                   </div>
                 </SurfaceCard>
@@ -228,7 +275,7 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
 
       <section className="tc-section">
         <header className="tc-section__head">
-          <h3 className="tc-section__title">从这里开始</h3>
+          <h3 className="tc-section__title">{t("shell.overview.guideTitle")}</h3>
         </header>
         <div className="tc-guide-grid">
           {GUIDE_CARDS.map((card) => (
@@ -251,8 +298,8 @@ export function Overview({ onStartScan, onNavigate }: OverviewProps) {
                 {card.icon}
               </span>
               <div className="tc-guide-card__body">
-                <h4 className="tc-guide-card__title">{card.title}</h4>
-                <p className="tc-guide-card__desc">{card.desc}</p>
+                <h4 className="tc-guide-card__title">{t(card.titleKey)}</h4>
+                <p className="tc-guide-card__desc">{t(card.descKey)}</p>
               </div>
               <span className="tc-guide-card__chev" aria-hidden="true">
                 →
