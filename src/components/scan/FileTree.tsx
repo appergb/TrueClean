@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import type { DirNode } from "../../lib/types";
+
 import { useI18n } from "../../i18n";
-import { useCategoryLabel, categoryColor } from "./CategoryBar";
 import { formatBytes, formatPercent } from "../../lib/format";
+import type { DirNode } from "../../lib/types";
+import { categoryColor,useCategoryLabel } from "./CategoryBar";
 
 interface FileTreeProps {
   /** Root node of the whole scan (for breadcrumb anchoring). */

@@ -1,6 +1,7 @@
 // Multiline input + send/stop. Enter sends, Shift+Enter inserts a newline.
 
 import { useLayoutEffect, useRef, useState } from "react";
+
 import { useI18n } from "../../i18n";
 
 interface ComposerProps {

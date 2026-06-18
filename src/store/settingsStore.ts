@@ -1,7 +1,8 @@
 // Settings store — owns the persisted AppSettings, loaded/saved via ipc.
 import { create } from "zustand";
-import type { AppSettings } from "../lib/types";
+
 import { getSettings, saveSettings } from "../lib/ipc";
+import type { AppSettings } from "../lib/types";
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;

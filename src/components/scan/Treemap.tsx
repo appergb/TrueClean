@@ -1,10 +1,11 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { hierarchy, treemap, treemapSquarify } from "d3-hierarchy";
 import type { HierarchyRectangularNode } from "d3-hierarchy";
-import type { DirNode } from "../../lib/types";
+import { hierarchy, treemap, treemapSquarify } from "d3-hierarchy";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+
 import { useI18n } from "../../i18n";
-import { useCategoryLabel } from "./CategoryBar";
 import { formatBytes, formatPercent } from "../../lib/format";
+import type { DirNode } from "../../lib/types";
+import { useCategoryLabel } from "./CategoryBar";
 import { categoryColor } from "./CategoryBar";
 
 interface TreemapProps {

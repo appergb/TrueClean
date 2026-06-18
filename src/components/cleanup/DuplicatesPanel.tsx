@@ -1,13 +1,15 @@
-import { useCallback, useMemo, useState } from "react";
+import "./cleanup.css";
+
 import { confirm, open } from "@tauri-apps/plugin-dialog";
+import { useCallback, useMemo, useState } from "react";
+
+import { useI18n } from "../../i18n";
+import { formatBytes, formatRelativeTime } from "../../lib/format";
+import { cleanPaths,findDuplicates } from "../../lib/ipc";
+import type { DuplicateGroup } from "../../lib/types";
+import { useSettingsStore } from "../../store/settingsStore";
 import Button from "../ui/Button";
 import { useToast } from "../ui/Toast";
-import { findDuplicates, cleanPaths } from "../../lib/ipc";
-import { useSettingsStore } from "../../store/settingsStore";
-import { useI18n } from "../../i18n";
-import type { DuplicateGroup } from "../../lib/types";
-import { formatBytes, formatRelativeTime } from "../../lib/format";
-import "./cleanup.css";
 
 const MB = 1024 * 1024;
 

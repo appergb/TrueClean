@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+import { useI18n } from "../../i18n";
+import { formatBytes } from "../../lib/format";
 import { getVolumes } from "../../lib/ipc";
 import type { AppSettings, VolumeInfo } from "../../lib/types";
-import { formatBytes } from "../../lib/format";
-import { SurfaceCard } from "../ui/SurfaceCard";
-import { ProgressRing } from "../ui/ProgressRing";
+import { useSettingsStore } from "../../store/settingsStore";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
-import { useI18n } from "../../i18n";
-import { useSettingsStore } from "../../store/settingsStore";
+import { ProgressRing } from "../ui/ProgressRing";
+import { SurfaceCard } from "../ui/SurfaceCard";
 import type { ViewId } from "./Sidebar";
 
 interface OverviewProps {

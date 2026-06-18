@@ -3,8 +3,9 @@
 // available when expanded. Distinguishes running / done / failed / skipped.
 
 import { useState } from "react";
-import type { ToolEvent } from "../../store/agentStore";
+
 import { useI18n } from "../../i18n";
+import type { ToolEvent } from "../../store/agentStore";
 
 interface ToolCallCardProps {
   event: ToolEvent;

@@ -1,10 +1,11 @@
 // First-run onboarding — a 3-step intro shown until the user dismisses it.
 // Persisted via localStorage so it only appears once.
 
-import { useState } from "react";
 import type { ReactNode } from "react";
-import { Button } from "../ui/Button";
+import { useState } from "react";
+
 import { useI18n } from "../../i18n";
+import { Button } from "../ui/Button";
 
 const STORAGE_KEY = "trueclean.onboarded";
 

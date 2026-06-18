@@ -4,6 +4,7 @@
 // keeps working even if the broken subtree included i18n consumers.
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
+
 import { t } from "../../i18n";
 
 interface ErrorBoundaryProps {
@@ -26,7 +27,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   componentDidCatch(error: Error, info: ErrorInfo): void {
     // Surface to the console only in dev — never log in production builds.
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
+       
       console.error("[ErrorBoundary]", error, info.componentStack);
     }
   }

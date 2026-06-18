@@ -2,14 +2,15 @@
 // transcript, confirmation dialog for destructive tools, AI-key hint, and
 // composer. Slides in via transform when `open`.
 
+import "./agent.css";
+
 import { useAgent } from "../../hooks/useAgent";
 import { useI18n } from "../../i18n";
-import { useSettingsStore } from "../../store/settingsStore";
 import type { AppSettings } from "../../lib/types";
-import MessageList from "./MessageList";
+import { useSettingsStore } from "../../store/settingsStore";
 import Composer from "./Composer";
 import ConfirmDialog from "./ConfirmDialog";
-import "./agent.css";
+import MessageList from "./MessageList";
 
 /** A provider is considered ready when its required credential is set.
  *  Mirrors the logic in Overview (B1) so the hint stays consistent. */

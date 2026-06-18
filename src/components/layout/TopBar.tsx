@@ -1,11 +1,11 @@
-import { IconButton } from "../ui/IconButton";
-import { Button } from "../ui/Button";
-import { Segmented } from "../ui/Segmented";
-import { CrashTest } from "../ui/ErrorBoundary";
-import { useI18n } from "../../i18n";
-import type { Locale } from "../../i18n";
-import type { ViewId } from "./Sidebar";
 import type { Theme } from "../../hooks/useTheme";
+import type { Locale } from "../../i18n";
+import { useI18n } from "../../i18n";
+import { Button } from "../ui/Button";
+import { CrashTest } from "../ui/ErrorBoundary";
+import { IconButton } from "../ui/IconButton";
+import { Segmented } from "../ui/Segmented";
+import type { ViewId } from "./Sidebar";
 
 interface TopBarProps {
   current: ViewId;

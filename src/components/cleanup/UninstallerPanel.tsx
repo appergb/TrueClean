@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import "./cleanup.css";
+
 import { confirm } from "@tauri-apps/plugin-dialog";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { useI18n } from "../../i18n";
+import { formatBytes, formatRelativeTime } from "../../lib/format";
+import { listApplications, uninstallApp } from "../../lib/ipc";
+import type { AppInfo, UninstallReport } from "../../lib/types";
+import { useSettingsStore } from "../../store/settingsStore";
 import Button from "../ui/Button";
 import { useToast } from "../ui/Toast";
-import { listApplications, uninstallApp } from "../../lib/ipc";
-import { useSettingsStore } from "../../store/settingsStore";
-import { useI18n } from "../../i18n";
-import type { AppInfo, UninstallReport } from "../../lib/types";
-import { formatBytes, formatRelativeTime } from "../../lib/format";
-import "./cleanup.css";
 
 function errMsg(error: unknown): string {
   if (error instanceof Error) return error.message;

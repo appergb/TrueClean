@@ -3,9 +3,10 @@
 // notifications. Loading toasts are sticky — update them to success/error or
 // dismiss explicitly.
 
-import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { useToastStore, type ToastItem, type ToastKind } from "./toastStore";
+import { useEffect } from "react";
+
+import { type ToastItem, type ToastKind,useToastStore } from "./toastStore";
 
 interface ToastApi {
   success: (title: string, description?: string, duration?: number) => string;

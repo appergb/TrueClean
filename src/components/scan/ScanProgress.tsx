@@ -1,6 +1,6 @@
-import type { ScanProgress as ScanProgressData } from "../../lib/types";
 import { useI18n } from "../../i18n";
 import { formatBytes } from "../../lib/format";
+import type { ScanProgress as ScanProgressData } from "../../lib/types";
 
 interface ScanProgressProps {
   progress: ScanProgressData | null;

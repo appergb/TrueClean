@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+
 import { t } from "../../i18n";
 
 interface ProgressRingProps {

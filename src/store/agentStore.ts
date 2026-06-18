@@ -2,11 +2,12 @@
 // and destructive-tool confirmation flow. UI talks to the backend only through
 // `src/lib/ipc.ts` (commands) + the Tauri event bus (confirmation responses).
 
-import { create } from "zustand";
-import { emit } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { emit } from "@tauri-apps/api/event";
+import { create } from "zustand";
+
+import { agentCancel, agentChat, onAgentEvent } from "../lib/ipc";
 import type { AgentEvent, ChatMessage } from "../lib/types";
-import { agentChat, agentCancel, onAgentEvent } from "../lib/ipc";
 
 export type AgentStatus = "idle" | "streaming";
 

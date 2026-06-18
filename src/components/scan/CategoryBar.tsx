@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import type { Category, CategoryBreakdown, DirNode } from "../../lib/types";
+
 import { useI18n } from "../../i18n";
 import { formatBytes, formatPercent } from "../../lib/format";
+import type { Category, CategoryBreakdown, DirNode } from "../../lib/types";
 
 /**
  * CSS custom-property reference for a category color, e.g.

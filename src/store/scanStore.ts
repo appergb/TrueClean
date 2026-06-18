@@ -1,19 +1,20 @@
-import { create } from "zustand";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { create } from "zustand";
+
+import { t } from "../i18n";
 import {
   cancelScan as ipcCancelScan,
   getVolumes,
   onScanProgress,
   scanPath,
 } from "../lib/ipc";
-import { t } from "../i18n";
-import { DEFAULT_SCAN_OPTIONS } from "../lib/types";
 import type {
   ScanOptions,
   ScanProgress,
   ScanResult,
   VolumeInfo,
 } from "../lib/types";
+import { DEFAULT_SCAN_OPTIONS } from "../lib/types";
 
 export type ScanStatus = "idle" | "scanning" | "done" | "error" | "partial";
 

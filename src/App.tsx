@@ -1,25 +1,27 @@
-import { useEffect, useState } from "react";
-import { useTheme } from "./hooks/useTheme";
-import { useAgentStore } from "./store/agentStore";
-import { useSettingsStore } from "./store/settingsStore";
-import { useI18n } from "./i18n";
-import { Sidebar } from "./components/layout/Sidebar";
-import type { ViewId } from "./components/layout/Sidebar";
-import { TopBar } from "./components/layout/TopBar";
-import Overview from "./components/layout/Overview";
-import ScanView from "./components/scan/ScanView";
-import JunkPanel from "./components/cleanup/JunkPanel";
-import LargeOldFiles from "./components/cleanup/LargeOldFiles";
-import DuplicatesPanel from "./components/cleanup/DuplicatesPanel";
-import UninstallerPanel from "./components/cleanup/UninstallerPanel";
-import StartupItems from "./components/cleanup/StartupItems";
-import SettingsPanel from "./components/settings/SettingsPanel";
-import AgentPanel from "./components/agent/AgentPanel";
-import { ErrorBoundary } from "./components/ui/ErrorBoundary";
-import { ToastViewport } from "./components/ui/Toast";
 import "./components/ui/ui.css";
 import "./components/layout/layout.css";
 import "./components/ui/feedback.css";
+
+import { useEffect, useState } from "react";
+
+import AgentPanel from "./components/agent/AgentPanel";
+import DuplicatesPanel from "./components/cleanup/DuplicatesPanel";
+import JunkPanel from "./components/cleanup/JunkPanel";
+import LargeOldFiles from "./components/cleanup/LargeOldFiles";
+import StartupItems from "./components/cleanup/StartupItems";
+import UninstallerPanel from "./components/cleanup/UninstallerPanel";
+import Overview from "./components/layout/Overview";
+import type { ViewId } from "./components/layout/Sidebar";
+import { Sidebar } from "./components/layout/Sidebar";
+import { TopBar } from "./components/layout/TopBar";
+import ScanView from "./components/scan/ScanView";
+import SettingsPanel from "./components/settings/SettingsPanel";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary";
+import { ToastViewport } from "./components/ui/Toast";
+import { useTheme } from "./hooks/useTheme";
+import { useI18n } from "./i18n";
+import { useAgentStore } from "./store/agentStore";
+import { useSettingsStore } from "./store/settingsStore";
 
 function ViewRouter({
   view,

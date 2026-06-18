@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import "./cleanup.css";
+
 import { confirm } from "@tauri-apps/plugin-dialog";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { useI18n } from "../../i18n";
+import { formatBytes } from "../../lib/format";
+import { cleanPaths, emptyTrash,scanJunk } from "../../lib/ipc";
+import type { JunkGroup } from "../../lib/types";
+import { useSettingsStore } from "../../store/settingsStore";
 import Button from "../ui/Button";
 import { useToast } from "../ui/Toast";
-import { scanJunk, cleanPaths, emptyTrash } from "../../lib/ipc";
-import { useSettingsStore } from "../../store/settingsStore";
-import { useI18n } from "../../i18n";
-import type { JunkGroup } from "../../lib/types";
-import { formatBytes } from "../../lib/format";
-import "./cleanup.css";
 
 function errMsg(error: unknown): string {
   if (error instanceof Error) return error.message;

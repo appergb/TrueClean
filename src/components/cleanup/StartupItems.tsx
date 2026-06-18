@@ -1,10 +1,12 @@
+import "./cleanup.css";
+
 import { useCallback, useEffect, useState } from "react";
+
+import { useI18n } from "../../i18n";
+import { listStartupItems, setStartupItem } from "../../lib/ipc";
+import type { StartupItem } from "../../lib/types";
 import Button from "../ui/Button";
 import { useToast } from "../ui/Toast";
-import { listStartupItems, setStartupItem } from "../../lib/ipc";
-import { useI18n } from "../../i18n";
-import type { StartupItem } from "../../lib/types";
-import "./cleanup.css";
 
 function errMsg(error: unknown): string {
   if (error instanceof Error) return error.message;

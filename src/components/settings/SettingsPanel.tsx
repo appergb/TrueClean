@@ -1,10 +1,12 @@
+import "./settings.css";
+
 import { useEffect, useState } from "react";
-import Button from "../ui/Button";
-import { useToast } from "../ui/Toast";
-import { useSettingsStore } from "../../store/settingsStore";
+
 import { useI18n, useLocaleStore } from "../../i18n";
 import type { AppSettings } from "../../lib/types";
-import "./settings.css";
+import { useSettingsStore } from "../../store/settingsStore";
+import Button from "../ui/Button";
+import { useToast } from "../ui/Toast";
 
 const DEFAULT_MODELS: Record<AppSettings["provider"], string> = {
   claude: "claude-sonnet-4-6",

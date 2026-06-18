@@ -4,9 +4,10 @@
 // rendered as coloured cards instead of plain text. Auto-scrolls to bottom.
 
 import { useEffect, useMemo, useRef } from "react";
+
+import { useI18n } from "../../i18n";
 import type { ChatMessage } from "../../lib/types";
 import type { ToolEvent } from "../../store/agentStore";
-import { useI18n } from "../../i18n";
 import ToolCallCard from "./ToolCallCard";
 
 interface MessageListProps {

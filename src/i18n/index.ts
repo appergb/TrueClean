@@ -18,9 +18,10 @@
 //      the raw key string (so a missing translation is visible, not silent).
 
 import { useCallback } from "react";
-import { useLocaleStore, type Locale } from "./localeStore";
-import { zh } from "./locales/zh";
+
 import { en } from "./locales/en";
+import { zh } from "./locales/zh";
+import { type Locale,useLocaleStore } from "./localeStore";
 
 const dictionaries: Record<Locale, unknown> = { zh, en };
 
@@ -77,4 +78,4 @@ export function t(key: string, params?: TParams): string {
   return translate(useLocaleStore.getState().locale, key, params);
 }
 
-export { useLocaleStore, type Locale } from "./localeStore";
+export { type Locale,useLocaleStore } from "./localeStore";

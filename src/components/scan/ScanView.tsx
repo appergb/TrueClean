@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import "./scan.css";
+
 import { open } from "@tauri-apps/plugin-dialog";
+import { useEffect, useMemo, useState } from "react";
+
 import { useScan } from "../../hooks/useScan";
 import { useI18n } from "../../i18n";
-import type { Category, DirNode, VolumeInfo } from "../../lib/types";
 import { formatBytes, formatPercent } from "../../lib/format";
+import type { Category, DirNode, VolumeInfo } from "../../lib/types";
 import CategoryBar from "./CategoryBar";
-import Treemap from "./Treemap";
-import Sunburst from "./Sunburst";
 import FileTree from "./FileTree";
 import ScanProgress from "./ScanProgress";
-import "./scan.css";
+import Sunburst from "./Sunburst";
+import Treemap from "./Treemap";
 
 type VizMode = "treemap" | "sunburst";
 

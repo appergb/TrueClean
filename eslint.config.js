@@ -10,7 +10,15 @@ import globals from "globals";
 export default tseslint.config(
   // ── Global ignores ───────────────────────────────────────────────
   {
-    ignores: ["dist/**", "src-tauri/**", "node_modules/**", "coverage/**"],
+    ignores: [
+      "dist/**",
+      "src-tauri/**",
+      "node_modules/**",
+      "coverage/**",
+      ".claude/**",
+      "proposal/**",
+      "*.config.{ts,js,mjs,cjs}",
+    ],
   },
 
   // ── Base recommended rules (JS + TS) ─────────────────────────────

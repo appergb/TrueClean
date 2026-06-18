@@ -1,11 +1,12 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { hierarchy, partition } from "d3-hierarchy";
 import type { HierarchyRectangularNode } from "d3-hierarchy";
+import { hierarchy, partition } from "d3-hierarchy";
 import { arc } from "d3-shape";
-import type { DirNode } from "../../lib/types";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+
 import { useI18n } from "../../i18n";
-import { useCategoryLabel, categoryColor } from "./CategoryBar";
 import { formatBytes, formatPercent } from "../../lib/format";
+import type { DirNode } from "../../lib/types";
+import { categoryColor,useCategoryLabel } from "./CategoryBar";
 
 interface SunburstProps {
   node: DirNode;
