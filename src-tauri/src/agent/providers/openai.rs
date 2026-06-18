@@ -5,7 +5,9 @@
 //! `choices[].delta.content` (text) and `choices[].delta.tool_calls`
 //! (fragmented; `arguments` strings are accumulated by tool-call index).
 
-use crate::agent::providers::traits::{for_each_line, sse_data, to_role_content, ProviderDelta};
+use crate::agent::providers::traits::{
+    for_each_line, send_with_retry, sse_data, to_role_content, ProviderDelta,
+};
 use crate::error::{AppError, AppResult};
 use crate::model::ChatMessage;
 use serde_json::{json, Value};
@@ -71,13 +73,13 @@ pub async fn stream_chat(
         "stream": true,
     });
 
-    let resp = http
-        .post(&url)
-        .header("authorization", format!("Bearer {api_key}"))
-        .header("content-type", "application/json")
-        .json(&body)
-        .send()
-        .await?;
+    let resp = send_with_retry(
+        http.post(&url)
+            .header("authorization", format!("Bearer {api_key}"))
+            .header("content-type", "application/json")
+            .json(&body),
+    )
+    .await?;
 
     // tool-call index → assembled tool. BTreeMap keeps a stable emit order.
     let mut pending: BTreeMap<u64, PendingTool> = BTreeMap::new();

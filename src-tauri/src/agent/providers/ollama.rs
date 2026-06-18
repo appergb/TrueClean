@@ -5,7 +5,9 @@
 //! when the model calls a tool, `message.tool_calls`. The final line carries
 //! `done: true`.
 
-use crate::agent::providers::traits::{for_each_line, to_role_content, ProviderDelta};
+use crate::agent::providers::traits::{
+    for_each_line, send_with_retry, to_role_content, ProviderDelta,
+};
 use crate::error::{AppError, AppResult};
 use crate::model::ChatMessage;
 use serde_json::{json, Value};
@@ -60,12 +62,12 @@ pub async fn stream_chat(
         "stream": true,
     });
 
-    let resp = http
-        .post(&url)
-        .header("content-type", "application/json")
-        .json(&body)
-        .send()
-        .await?;
+    let resp = send_with_retry(
+        http.post(&url)
+            .header("content-type", "application/json")
+            .json(&body),
+    )
+    .await?;
 
     // Ollama may emit tool calls per-line; counter gives synthetic ids since the
     // API does not always provide one.

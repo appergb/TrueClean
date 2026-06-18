@@ -19,7 +19,7 @@
 核心结构：`VolumeInfo`、`Category`(枚举)、`DirNode`、`CategoryBreakdown`/`CategoryEntry`、
 `FileEntry`、`ScanOptions`、`ScanProgress`、`ScanResult`、`JunkItem`/`JunkGroup`/`JunkKind`、
 `DuplicateGroup`、`AppInfo`、`UninstallReport`、`StartupItem`、`CleanReport`、`AppSettings`、
-`ChatMessage`、`AgentEvent`(tagged enum, `type` 字段)。
+`ChatMessage`、`AgentEvent`(tagged enum, `type` 字段: text/toolCall/toolResult/confirmationRequest/done/error)。
 
 ## 2. Tauri 命令（IPC 契约 — 命令名与签名必须逐字一致）
 
@@ -50,6 +50,9 @@
   - 流式：对每个增量 `app.emit(&format!("agent://event/{session_id}"), AgentEvent)`。
   - 支持工具调用循环（见 §4）。
 - `agent_cancel(session_id: String, state: State<AppState>) -> Result<()>`
+- `agent_confirm(confirmation_id: String, approved: bool) -> Result<bool>`
+  - 前端收到 `ConfirmationRequest` 事件后调用此命令回传确认结果。`approved=true` 则执行破坏性工具，`false` 则跳过。返回 `true` 表示确认 ID 已被解析（会话仍在等待）；`false` 表示 ID 已失效（超时/取消/不存在）。
+  - 备用路径：前端也可直接 `app.emit('agent://confirm', { id, approved })`，runner 内置的事件监听器会同样路由到 `resolve_confirmation`。
 
 ### commands/settings.rs  —— owner: ME（已写好，勿改）
 - `get_settings(state) -> Result<AppSettings>`，`save_settings(settings, state) -> Result<()>`（持久化到配置文件）。
@@ -96,10 +99,13 @@
 - `find_duplicates` {path, minSizeMb}
 - `list_applications` — 已安装应用及体积/最近使用
 - `list_startup_items` — 启动项
-- `clean_paths` {paths[], toTrash} — **危险操作**：执行前 runner 必须发事件让前端确认（或默认 toTrash=true 走回收站）
-- `empty_trash`
+- `analyze_disk_health` — 综合磁盘健康扫描：链式调用 scan_junk + list_volumes，返回总容量/垃圾总量/top3 可清理项/风险等级
+- `clean_paths` {paths[], toTrash} — **危险操作**：执行前 runner 必须发 `ConfirmationRequest` 事件让前端确认（默认 toTrash=true 走回收站）
+- `empty_trash` — **危险操作**：执行前 runner 必须发 `ConfirmationRequest` 事件让前端确认
 
-`dispatch` 内部直接调用 §3 的库函数，并把结果裁剪成对 LLM 友好的紧凑 JSON（大小用人类可读，列表截断 topN）。
+所有返回列表的工具结果包含 `highlights` 字段（3-5 条关键发现，按可释放空间×安全等级排序）和每项的 `dataNature` 字段（system/systemCache/systemLog/userCache/userData/userMedia/developerArtifact/temp/trash/unknown）。
+
+`dispatch` 内部直接调用 §3 的库函数，并把结果裁剪成对 LLM 友好的紧凑 JSON（大小用人类可读，列表截断 topN）。破坏性工具经 `cleaning::safety::split_protected` 校验，命中保护路径的拒绝并返回受保护清单。
 
 ## 5. 系统提示词要点（agent/prompt.rs）
 

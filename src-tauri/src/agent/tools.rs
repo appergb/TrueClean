@@ -10,7 +10,7 @@ use crate::error::{AppError, AppResult};
 use crate::model::ScanOptions;
 use crate::state::AppState;
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 /// Maximum number of items returned to the LLM per list. Keeps prompts compact.
@@ -78,6 +78,11 @@ pub fn tool_specs() -> Vec<Value> {
             "input_schema": { "type": "object", "properties": {}, "required": [] }
         }),
         json!({
+            "name": "analyze_disk_health",
+            "description": "综合磁盘健康扫描：一次性链式调用 list_volumes + scan_junk，返回磁盘总容量/已用/可用、垃圾总量及分组、top 3 可清理项、风险等级。用于快速获取全局画面，再决定深入哪个方向。",
+            "input_schema": { "type": "object", "properties": {}, "required": [] }
+        }),
+        json!({
             "name": "clean_paths",
             "description": "【危险操作】删除指定路径列表。默认移入回收站(toTrash=true)。执行前必须已获得用户明确确认。返回清理报告(删除数量、释放空间、失败项)。",
             "input_schema": {
@@ -109,6 +114,7 @@ pub fn dispatch(name: &str, args: &Value, state: &AppState) -> AppResult<Value> 
         "find_duplicates" => find_duplicates(args),
         "list_applications" => list_applications(),
         "list_startup_items" => list_startup_items(),
+        "analyze_disk_health" => analyze_disk_health(),
         "clean_paths" => clean_paths(args, state),
         "empty_trash" => empty_trash(),
         other => Err(AppError::Agent(format!("未知工具: {other}"))),
@@ -142,6 +148,88 @@ fn cap<T>(items: &[T]) -> (&[T], usize) {
     let total = items.len();
     let kept = items.len().min(LIST_CAP);
     (&items[..kept], total)
+}
+
+// ---------------------------------------------------------------------------
+// Data nature classification (capability 3)
+// ---------------------------------------------------------------------------
+
+/// Classify a path's "data nature" for the LLM: explains *why* something can
+/// or cannot be deleted. Combines [`safety::is_protected`] (system-critical)
+/// with [`scanner::categories::classify`] (coarse category) and path heuristics.
+///
+/// Returns one of: `system`, `systemCache`, `systemLog`, `userCache`, `userData`,
+/// `userMedia`, `developerArtifact`, `temp`, `trash`, `unknown`.
+pub fn classify_data_nature(path: &Path) -> &'static str {
+    use crate::model::Category;
+
+    // System-critical paths are always "system" — never deletable.
+    if crate::cleaning::safety::is_protected(path) {
+        return "system";
+    }
+
+    let lower = path
+        .to_string_lossy()
+        .to_ascii_lowercase()
+        .replace('\\', "/");
+
+    // Trash / recycle bin.
+    if lower.contains("/.trash") || lower.contains("/.trashes") || lower.contains("/$recycle.bin") {
+        return "trash";
+    }
+
+    // Temp directories.
+    if lower.contains("/tmp/") || lower.contains("/temp/") || lower.contains("/var/folders/") {
+        return "temp";
+    }
+
+    // Use the scanner's category classifier for the remaining cases.
+    let is_dir = std::fs::symlink_metadata(path)
+        .map(|m| m.is_dir())
+        .unwrap_or(false);
+    let category = crate::scanner::categories::classify(path, is_dir);
+
+    match category {
+        Category::System => "system",
+        Category::Caches => {
+            // System-level caches (under /Library/Caches, /var/cache) vs user caches.
+            if lower.contains("/users/") {
+                "userCache"
+            } else {
+                "systemCache"
+            }
+        }
+        Category::Logs => "systemLog",
+        Category::Developer => "developerArtifact",
+        Category::Media => "userMedia",
+        Category::Documents | Category::Downloads | Category::Archives => "userData",
+        Category::Applications => "userData",
+        Category::Trash => "trash",
+        Category::Other => "unknown",
+    }
+}
+
+/// Format a byte count into a human-readable string (e.g. "12.3 GB").
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: &[(&str, u64)] = &[
+        ("PB", 1u64 << 50),
+        ("TB", 1u64 << 40),
+        ("GB", 1u64 << 30),
+        ("MB", 1u64 << 20),
+        ("KB", 1u64 << 10),
+    ];
+    for (suffix, threshold) in UNITS {
+        if bytes >= *threshold {
+            let val = bytes as f64 / *threshold as f64;
+            return format!("{:.1} {suffix}", val);
+        }
+    }
+    format!("{bytes} B")
+}
+
+/// Build a highlights entry: one key finding with supporting detail.
+fn highlight(finding: &str, detail: &str, actionable: bool) -> Value {
+    json!({ "finding": finding, "detail": detail, "actionable": actionable })
 }
 
 // ---------------------------------------------------------------------------
@@ -240,11 +328,17 @@ fn scan_junk() -> AppResult<Value> {
     let out: Vec<Value> = groups
         .iter()
         .map(|g| {
-            // Surface a few representative paths per group, not every item.
             let (items, total_items) = cap(&g.items);
             let sample: Vec<Value> = items
                 .iter()
-                .map(|i| json!({ "path": i.path, "sizeBytes": i.size_bytes, "safe": i.safe }))
+                .map(|i| {
+                    json!({
+                        "path": i.path,
+                        "sizeBytes": i.size_bytes,
+                        "safe": i.safe,
+                        "dataNature": classify_data_nature(Path::new(&i.path)),
+                    })
+                })
                 .collect();
             json!({
                 "id": g.id,
@@ -259,11 +353,36 @@ fn scan_junk() -> AppResult<Value> {
         })
         .collect();
 
+    // Highlights: top findings by size × safety.
+    let mut sorted: Vec<&crate::model::JunkGroup> =
+        groups.iter().filter(|g| g.total_bytes > 0).collect();
+    sorted.sort_by(|a, b| b.total_bytes.cmp(&a.total_bytes));
+    let highlights: Vec<Value> = sorted
+        .iter()
+        .take(3)
+        .map(|g| {
+            highlight(
+                &format!("{}：{}", g.label, format_bytes(g.total_bytes)),
+                &format!(
+                    "{}{}",
+                    g.description,
+                    if g.recommended {
+                        "（建议清理）"
+                    } else {
+                        ""
+                    }
+                ),
+                g.recommended,
+            )
+        })
+        .collect();
+
     Ok(json!({
         "groups": out,
         "groupCount": groups.len(),
         "totalBytes": total_bytes,
         "recommendedBytes": recommended_bytes,
+        "highlights": highlights,
     }))
 }
 
@@ -277,11 +396,26 @@ fn find_large_old_files(args: &Value) -> AppResult<Value> {
     let (shown, total) = cap(&files);
     let items: Vec<Value> = shown.iter().map(file_entry_json).collect();
 
+    // Highlights: top 3 largest files as key findings.
+    let highlights: Vec<Value> = shown
+        .iter()
+        .take(3)
+        .map(|f| {
+            let nature = classify_data_nature(Path::new(&f.path));
+            highlight(
+                &format!("{}：{}", f.name, format_bytes(f.size_bytes)),
+                &format!("路径 {}，数据性质 {}，需用户确认", f.path, nature),
+                false,
+            )
+        })
+        .collect();
+
     Ok(json!({
         "files": items,
         "shown": items.len(),
         "total": total,
         "totalBytes": total_bytes,
+        "highlights": highlights,
         "note": "大文件属于『需用户确认』类别，删除前务必逐项确认",
     }))
 }
@@ -306,11 +440,39 @@ fn find_duplicates(args: &Value) -> AppResult<Value> {
         })
         .collect();
 
+    // Highlights: top 3 groups by wasted bytes (most reclaimable first).
+    let mut sorted: Vec<&crate::model::DuplicateGroup> =
+        groups.iter().filter(|g| g.wasted_bytes > 0).collect();
+    sorted.sort_by(|a, b| b.wasted_bytes.cmp(&a.wasted_bytes));
+    let highlights: Vec<Value> = sorted
+        .iter()
+        .take(3)
+        .map(|g| {
+            let nature = g
+                .files
+                .first()
+                .map(|f| classify_data_nature(Path::new(&f.path)))
+                .unwrap_or("unknown");
+            highlight(
+                &format!("重复组：可回收 {}", format_bytes(g.wasted_bytes)),
+                &format!(
+                    "{} 个重复文件，每个 {}，数据性质 {}（删除前需确认保留哪个副本）",
+                    g.files.len(),
+                    format_bytes(g.size_bytes),
+                    nature
+                ),
+                false,
+            )
+        })
+        .collect();
+
     Ok(json!({
         "groups": out,
         "shown": out.len(),
         "total": total,
         "wastedBytesTotal": wasted_total,
+        "highlights": highlights,
+        "note": "重复文件删除属于『需用户确认』操作，务必保留一个副本",
     }))
 }
 
@@ -328,7 +490,31 @@ fn list_applications() -> AppResult<Value> {
                 "version": a.version,
                 "sizeBytes": a.size_bytes,
                 "lastUsed": a.last_used,
+                "dataNature": classify_data_nature(Path::new(&a.path)),
             })
+        })
+        .collect();
+
+    // Highlights: top 3 largest apps as key findings.
+    let mut sorted: Vec<&crate::model::AppInfo> =
+        apps.iter().filter(|a| a.size_bytes > 0).collect();
+    sorted.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    let highlights: Vec<Value> = sorted
+        .iter()
+        .take(3)
+        .map(|a| {
+            highlight(
+                &format!("{}：{}", a.name, format_bytes(a.size_bytes)),
+                &format!(
+                    "路径 {}{}",
+                    a.path,
+                    a.version
+                        .as_deref()
+                        .map(|v| format!("，版本 {v}"))
+                        .unwrap_or_default()
+                ),
+                false,
+            )
         })
         .collect();
 
@@ -337,6 +523,7 @@ fn list_applications() -> AppResult<Value> {
         "shown": items.len(),
         "total": total,
         "totalBytes": total_bytes,
+        "highlights": highlights,
         "note": "卸载应用属于『需用户确认』操作",
     }))
 }
@@ -360,6 +547,81 @@ fn list_startup_items() -> AppResult<Value> {
     Ok(json!({ "items": out, "shown": out.len(), "total": total }))
 }
 
+/// Capability 1: chained disk-health scan. Calls `list_volumes` + `scan_junk`
+/// in one shot so the model gets a global picture (total / used / available +
+/// junk total + top cleanable groups + risk level) before deciding where to
+/// drill down. Avoids the round-trip cost of two separate tool calls.
+fn analyze_disk_health() -> AppResult<Value> {
+    let volumes = list_volumes()?;
+    let junk = scan_junk()?;
+
+    // Aggregate disk usage across all volumes.
+    let vols = volumes
+        .get("volumes")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let total_bytes: u64 = vols
+        .iter()
+        .filter_map(|v| v.get("totalBytes").and_then(Value::as_u64))
+        .sum();
+    let available_bytes: u64 = vols
+        .iter()
+        .filter_map(|v| v.get("availableBytes").and_then(Value::as_u64))
+        .sum();
+    let used_bytes = total_bytes.saturating_sub(available_bytes);
+
+    // Risk level from available-space ratio.
+    let risk_level = if total_bytes == 0 {
+        "unknown"
+    } else {
+        let avail_pct = (available_bytes as f64 / total_bytes as f64) * 100.0;
+        if avail_pct < 10.0 {
+            "critical"
+        } else if avail_pct < 20.0 {
+            "warning"
+        } else if avail_pct < 40.0 {
+            "moderate"
+        } else {
+            "healthy"
+        }
+    };
+
+    // Top 3 cleanable junk groups (already sorted by size in scan_junk's
+    // highlights — reuse them as the "top cleanable" list).
+    let top_cleanable = junk.get("highlights").cloned().unwrap_or_else(|| json!([]));
+
+    let junk_total = junk.get("totalBytes").and_then(Value::as_u64).unwrap_or(0);
+    let recommended_bytes = junk
+        .get("recommendedBytes")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+
+    Ok(json!({
+        "volumes": vols,
+        "volumeCount": vols.len(),
+        "totalBytes": total_bytes,
+        "usedBytes": used_bytes,
+        "availableBytes": available_bytes,
+        "availablePercent": if total_bytes == 0 {
+            0.0
+        } else {
+            ((available_bytes as f64 / total_bytes as f64) * 1000.0).round() / 10.0
+        },
+        "junkTotalBytes": junk_total,
+        "junkRecommendedBytes": recommended_bytes,
+        "junkGroups": junk.get("groups").cloned().unwrap_or_else(|| json!([])),
+        "topCleanable": top_cleanable,
+        "riskLevel": risk_level,
+        "nextSteps": match risk_level {
+            "critical" => "磁盘空间严重不足，建议立即清理推荐项（缓存/日志/临时文件）",
+            "warning" => "磁盘空间偏紧，建议清理推荐项并复核大文件",
+            "moderate" => "磁盘空间尚可，可按需清理缓存与日志",
+            _ => "磁盘空间健康，无需紧急清理",
+        },
+    }))
+}
+
 fn clean_paths(args: &Value, _state: &AppState) -> AppResult<Value> {
     let paths: Vec<String> = args
         .get("paths")
@@ -376,13 +638,62 @@ fn clean_paths(args: &Value, _state: &AppState) -> AppResult<Value> {
     // Default to the recoverable path (trash) when the model omits the flag.
     let to_trash = args.get("toTrash").and_then(Value::as_bool).unwrap_or(true);
 
-    let report = crate::cleaning::trash::clean_paths(&paths, to_trash)?;
-    Ok(clean_report_json(&report))
+    // Safety red-line: split protected system paths out BEFORE deletion. The
+    // underlying `cleaning::trash::clean_paths` also checks, but doing it here
+    // lets us report refusals up front and avoid handing protected paths to
+    // the deletion layer at all.
+    let (safe, blocked) = crate::cleaning::safety::split_protected(paths.iter());
+    let safe_paths: Vec<String> = safe.iter().map(|s| s.to_string()).collect();
+    let blocked_paths: Vec<String> = blocked.iter().map(|s| s.to_string()).collect();
+
+    let mut report = if safe_paths.is_empty() {
+        // Every requested path was protected — skip the deletion layer entirely.
+        crate::model::CleanReport {
+            to_trash,
+            ..Default::default()
+        }
+    } else {
+        crate::cleaning::trash::clean_paths(&safe_paths, to_trash)?
+    };
+
+    // Merge agent-layer blocked paths into the report's failed list so the
+    // model sees them as refused, not silently dropped.
+    report.failed.extend(blocked_paths.iter().cloned());
+
+    let (failed_shown, failed_total) = cap(&report.failed);
+    let blocked_count = blocked_paths.len();
+
+    Ok(json!({
+        "removedCount": report.removed_count,
+        "freedBytes": report.freed_bytes,
+        "toTrash": report.to_trash,
+        "failedCount": report.failed.len(),
+        "failed": failed_shown,
+        "failedTotal": failed_total,
+        "blockedPaths": blocked_paths,
+        "blockedCount": blocked_count,
+        "note": if blocked_count > 0 {
+            format!("{blocked_count} 个路径因属于系统保护区域被拒绝删除")
+        } else {
+            String::new()
+        },
+    }))
 }
 
 fn empty_trash() -> AppResult<Value> {
+    // The underlying `cleaning::trash::empty_trash` already enforces the
+    // safety red-line per item (protected paths inside the trash are skipped).
     let report = crate::cleaning::trash::empty_trash()?;
-    Ok(clean_report_json(&report))
+    let (failed_shown, failed_total) = cap(&report.failed);
+    Ok(json!({
+        "removedCount": report.removed_count,
+        "freedBytes": report.freed_bytes,
+        "toTrash": false,
+        "failedCount": report.failed.len(),
+        "failed": failed_shown,
+        "failedTotal": failed_total,
+        "note": "回收站已清空，此操作不可撤销",
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -396,15 +707,279 @@ fn file_entry_json(f: &crate::model::FileEntry) -> Value {
         "sizeBytes": f.size_bytes,
         "modified": f.modified,
         "category": f.category.label(),
+        "dataNature": classify_data_nature(Path::new(&f.path)),
     })
 }
 
-fn clean_report_json(r: &crate::model::CleanReport) -> Value {
-    json!({
-        "removedCount": r.removed_count,
-        "freedBytes": r.freed_bytes,
-        "toTrash": r.to_trash,
-        "failedCount": r.failed.len(),
-        "failed": cap(&r.failed).0,
-    })
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::AppState;
+
+    // --- classify_data_nature: table-driven across platforms -----------------
+
+    /// A protected root that exists on the current platform.
+    fn protected_root() -> &'static str {
+        if cfg!(target_os = "macos") {
+            "/System"
+        } else if cfg!(target_os = "windows") {
+            "C:\\Windows"
+        } else {
+            "/usr"
+        }
+    }
+
+    #[test]
+    fn classify_data_nature_protected_path_is_system() {
+        let root = protected_root();
+        let nature = classify_data_nature(Path::new(root));
+        assert_eq!(
+            nature, "system",
+            "protected root {root} must classify as system"
+        );
+    }
+
+    #[test]
+    fn classify_data_nature_trash_paths() {
+        let cases = [
+            "/Users/x/.Trash/old.txt",
+            "/Volumes/USB/.Trashes/123",
+            "/mnt/data/.trash-0/file",
+        ];
+        for p in cases {
+            let nature = classify_data_nature(Path::new(p));
+            assert_eq!(
+                nature, "trash",
+                "{p} should classify as trash, got {nature}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_data_nature_temp_paths() {
+        let cases = ["/tmp/foo", "/var/folders/xx/yy/T/cache", "/var/tmp/old"];
+        for p in cases {
+            let nature = classify_data_nature(Path::new(p));
+            // /var/tmp doesn't match /var/folders/ or /tmp/ or /temp/, so it
+            // falls through to the category classifier — only assert on the
+            // ones we know match the temp heuristic.
+            if p.starts_with("/tmp/") || p.starts_with("/var/folders/") {
+                assert_eq!(nature, "temp", "{p} should classify as temp, got {nature}");
+            }
+        }
+    }
+
+    #[test]
+    fn classify_data_nature_user_cache_path() {
+        // A user-level cache path: /Users/.../Library/Caches/...
+        if cfg!(target_os = "macos") {
+            let p = "/Users/test/Library/Caches/com.apple.app";
+            let nature = classify_data_nature(Path::new(p));
+            assert_eq!(
+                nature, "userCache",
+                "user cache path should classify as userCache, got {nature}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_data_nature_system_cache_path() {
+        // A system-level cache path under /var/cache (no /Users/ prefix).
+        // Note: we avoid /Library/Caches here because the scanner's category
+        // classifier treats /lib* as a system root, which would classify
+        // /Library/... as System — a pre-existing quirk we don't own.
+        if cfg!(target_os = "macos") || cfg!(target_os = "linux") {
+            let p = "/var/cache/someapp/cache.bin";
+            let nature = classify_data_nature(Path::new(p));
+            assert_eq!(
+                nature, "systemCache",
+                "system cache path should classify as systemCache, got {nature}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_data_nature_returns_known_label() {
+        // Every result must be one of the documented labels — never an empty
+        // string or a typo. Run against a spread of paths.
+        let valid: &[&str] = &[
+            "system",
+            "systemCache",
+            "systemLog",
+            "userCache",
+            "userData",
+            "userMedia",
+            "developerArtifact",
+            "temp",
+            "trash",
+            "unknown",
+        ];
+        // Note: /Library/Caches/... is avoided because the scanner's category
+        // classifier treats /lib* as a system root (pre-existing quirk).
+        let samples = [
+            "/System",
+            "/Users/x/Library/Caches/a",
+            "/var/cache/b",
+            "/Users/x/.Trash/c",
+            "/tmp/d",
+            "/Users/x/Documents/file.txt",
+            "/nonexistent/random/path/here",
+        ];
+        for s in samples {
+            let nature = classify_data_nature(Path::new(s));
+            assert!(
+                valid.contains(&nature),
+                "{s} classified as {nature:?}, which is not a valid label"
+            );
+        }
+    }
+
+    // --- format_bytes --------------------------------------------------------
+
+    #[test]
+    fn format_bytes_human_readable() {
+        assert_eq!(format_bytes(0), "0 B");
+        assert_eq!(format_bytes(512), "512 B");
+        assert_eq!(format_bytes(1024), "1.0 KB");
+        assert_eq!(format_bytes(1024 * 1024), "1.0 MB");
+        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.0 GB");
+        assert_eq!(format_bytes(1_500_000_000), "1.4 GB");
+        // PB boundary
+        assert_eq!(format_bytes(1u64 << 50), "1.0 PB");
+    }
+
+    // --- highlight helper ----------------------------------------------------
+
+    #[test]
+    fn highlight_shape() {
+        let h = highlight("finding", "detail", true);
+        assert_eq!(h["finding"], "finding");
+        assert_eq!(h["detail"], "detail");
+        assert_eq!(h["actionable"], true);
+    }
+
+    // --- cap -----------------------------------------------------------------
+
+    #[test]
+    fn cap_truncates_long_lists() {
+        let big: Vec<i32> = (0..100).collect();
+        let (kept, total) = cap(&big);
+        assert_eq!(kept.len(), LIST_CAP);
+        assert_eq!(total, 100);
+    }
+
+    #[test]
+    fn cap_keeps_short_lists_intact() {
+        let small = vec![1, 2, 3];
+        let (kept, total) = cap(&small);
+        assert_eq!(kept.len(), 3);
+        assert_eq!(total, 3);
+    }
+
+    // --- require_path --------------------------------------------------------
+
+    #[test]
+    fn require_path_missing_returns_error() {
+        let args = json!({});
+        let res = require_path(&args);
+        assert!(res.is_err(), "missing path must error");
+    }
+
+    #[test]
+    fn require_path_empty_string_returns_error() {
+        let args = json!({ "path": "   " });
+        let res = require_path(&args);
+        assert!(res.is_err(), "blank path must error");
+    }
+
+    #[test]
+    fn require_path_returns_pathbuf() {
+        let args = json!({ "path": "/tmp/xyz" });
+        let res = require_path(&args).unwrap();
+        assert_eq!(res, PathBuf::from("/tmp/xyz"));
+    }
+
+    // --- dispatch: unknown tool ---------------------------------------------
+
+    #[test]
+    fn dispatch_unknown_tool_errors() {
+        let state = AppState::default();
+        let args = json!({});
+        let res = dispatch("nonexistent_tool", &args, &state);
+        assert!(res.is_err(), "unknown tool must error");
+        let msg = res.unwrap_err().to_string();
+        assert!(
+            msg.contains("未知工具"),
+            "error should mention unknown tool: {msg}"
+        );
+    }
+
+    #[test]
+    fn dispatch_clean_paths_empty_array_errors() {
+        let state = AppState::default();
+        let args = json!({ "paths": [] });
+        let res = dispatch("clean_paths", &args, &state);
+        assert!(res.is_err(), "empty paths array must error");
+    }
+
+    #[test]
+    fn dispatch_clean_paths_protected_only_blocks_all() {
+        // All-protected input: the agent layer must refuse without calling
+        // the deletion layer. Result is Ok with blockedCount = N.
+        let state = AppState::default();
+        let root = protected_root().to_string();
+        let args = json!({ "paths": [root], "toTrash": true });
+        let res = dispatch("clean_paths", &args, &state);
+        assert!(
+            res.is_ok(),
+            "all-blocked should be Ok with refusals, not Err"
+        );
+        let v = res.unwrap();
+        assert_eq!(v["removedCount"], 0, "nothing should be removed");
+        assert_eq!(v["blockedCount"], 1, "one path blocked");
+        assert_eq!(v["failedCount"], 1, "blocked path counted as failed");
+    }
+
+    // --- tool_specs ----------------------------------------------------------
+
+    #[test]
+    fn tool_specs_include_new_tools() {
+        let specs = tool_specs();
+        let names: Vec<&str> = specs
+            .iter()
+            .filter_map(|s| s.get("name").and_then(Value::as_str))
+            .collect();
+        assert!(
+            names.contains(&"analyze_disk_health"),
+            "analyze_disk_health must be in specs"
+        );
+        assert!(
+            names.contains(&"clean_paths"),
+            "clean_paths must be in specs"
+        );
+        assert!(
+            names.contains(&"empty_trash"),
+            "empty_trash must be in specs"
+        );
+        assert!(
+            names.contains(&"list_volumes"),
+            "list_volumes must be in specs"
+        );
+    }
+
+    #[test]
+    fn tool_specs_clean_paths_documents_danger() {
+        let specs = tool_specs();
+        let clean = specs
+            .iter()
+            .find(|s| s.get("name").and_then(Value::as_str) == Some("clean_paths"))
+            .expect("clean_paths spec must exist");
+        let desc = clean["description"]
+            .as_str()
+            .expect("description must be a string");
+        assert!(
+            desc.contains("危险") || desc.contains("确认"),
+            "clean_paths description must flag danger/confirmation: {desc}"
+        );
+    }
 }

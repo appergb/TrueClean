@@ -9,7 +9,7 @@
 //!   - `message_delta`                          → capture stop_reason
 
 use crate::agent::providers::traits::{
-    for_each_line, sse_data, to_anthropic_messages, ProviderDelta,
+    for_each_line, send_with_retry, sse_data, to_anthropic_messages, ProviderDelta,
 };
 use crate::error::{AppError, AppResult};
 use crate::model::ChatMessage;
@@ -68,14 +68,14 @@ pub async fn stream_chat(
         "stream": true,
     });
 
-    let resp = http
-        .post(API_URL)
-        .header("x-api-key", api_key)
-        .header("anthropic-version", ANTHROPIC_VERSION)
-        .header("content-type", "application/json")
-        .json(&body)
-        .send()
-        .await?;
+    let resp = send_with_retry(
+        http.post(API_URL)
+            .header("x-api-key", api_key)
+            .header("anthropic-version", ANTHROPIC_VERSION)
+            .header("content-type", "application/json")
+            .json(&body),
+    )
+    .await?;
 
     // Index of the currently-open content block → pending tool (if tool_use).
     let mut pending: HashMap<u64, PendingTool> = HashMap::new();

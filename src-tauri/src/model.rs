@@ -319,6 +319,15 @@ pub enum AgentEvent {
         name: String,
         result: serde_json::Value,
     },
+    /// Emitted before a destructive tool runs, asking the frontend to confirm.
+    /// The runner blocks until `agent_confirm(session_id, confirmation_id, approved)`
+    /// resolves the pending confirmation. Unapproved → the tool is skipped.
+    ConfirmationRequest {
+        id: String,
+        tool_name: String,
+        args: serde_json::Value,
+        summary: String,
+    },
     Done {
         stop_reason: String,
     },

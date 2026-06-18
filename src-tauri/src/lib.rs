@@ -40,6 +40,7 @@ pub fn run() {
             // agent
             commands::agent::agent_chat,
             commands::agent::agent_cancel,
+            commands::agent::agent_confirm,
             // settings
             commands::settings::get_settings,
             commands::settings::save_settings,

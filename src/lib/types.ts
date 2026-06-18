@@ -184,5 +184,12 @@ export type AgentEvent =
   | { type: "text"; delta: string }
   | { type: "toolCall"; id: string; name: string; args: unknown }
   | { type: "toolResult"; id: string; name: string; result: unknown }
+  | {
+      type: "confirmationRequest";
+      id: string;
+      toolName: string;
+      args: unknown;
+      summary: string;
+    }
   | { type: "done"; stopReason: string }
   | { type: "error"; message: string };

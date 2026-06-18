@@ -1,4 +1,5 @@
-//! Agent IPC commands: start a streaming chat turn and cancel an in-flight one.
+//! Agent IPC commands: start a streaming chat turn, cancel an in-flight one,
+//! and resolve a pending destructive-tool confirmation.
 
 use crate::agent::runner;
 use crate::error::AppResult;
@@ -32,4 +33,16 @@ pub async fn agent_chat(
 pub fn agent_cancel(session_id: String, state: State<AppState>) -> AppResult<()> {
     state.cancel(&session_id);
     Ok(())
+}
+
+/// Resolve a pending destructive-tool confirmation. The frontend invokes this
+/// after receiving a `ConfirmationRequest` event; `approved=true` lets the
+/// tool proceed, `false` skips it. Returns `true` if the confirmation id was
+/// found and resolved (i.e. the session was still waiting).
+///
+/// This is the command-based counterpart to the `agent://confirm` event
+/// listener; either path routes to [`runner::resolve_confirmation`].
+#[tauri::command]
+pub fn agent_confirm(confirmation_id: String, approved: bool) -> AppResult<bool> {
+    Ok(runner::resolve_confirmation(&confirmation_id, approved))
 }
