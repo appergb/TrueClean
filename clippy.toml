@@ -1,0 +1,6 @@
+# TrueClean clippy configuration
+# https://rust-lang.github.io/rust-clippy/master/index.html
+
+# Minimum Supported Rust Version — matches Cargo.toml `rust-version`.
+# Lets clippy suggest version-appropriate idioms.
+msrv = "1.77"

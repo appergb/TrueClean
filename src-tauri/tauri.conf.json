@@ -40,5 +40,13 @@
     "category": "Utility",
     "shortDescription": "Cross-platform disk cleaner with an AI agent",
     "longDescription": "TrueClean scans your disk, visualizes usage, identifies junk and system data, and lets an AI agent recommend and perform safe cleanups."
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENDMTA2NkQ5MThGRTk3NkQKUldSdGwvNFkyV1lRekFEUWN0dTRtYm1xMTdFWHhzRlZGeGdSbTZjZjVXUlphZndsd0NjY0ZnemIK",
+      "endpoints": [
+        "https://github.com/appergb/TrueClean/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
