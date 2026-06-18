@@ -3,9 +3,9 @@ import { hierarchy, partition } from "d3-hierarchy";
 import type { HierarchyRectangularNode } from "d3-hierarchy";
 import { arc } from "d3-shape";
 import type { DirNode } from "../../lib/types";
-import { CATEGORY_LABELS } from "../../lib/types";
-import { formatBytes } from "../../lib/format";
-import { categoryColor } from "./CategoryBar";
+import { useI18n } from "../../i18n";
+import { useCategoryLabel, categoryColor } from "./CategoryBar";
+import { formatBytes, formatPercent } from "../../lib/format";
 
 interface SunburstProps {
   node: DirNode;
@@ -21,6 +21,8 @@ export default function Sunburst({
   onDrill,
   onHoverCategory,
 }: SunburstProps) {
+  const { t } = useI18n();
+  const catLabel = useCategoryLabel();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState(0);
   const [hover, setHover] = useState<DirNode | null>(null);
@@ -80,7 +82,7 @@ export default function Sunburst({
           viewBox={`${-radius} ${-radius} ${box} ${box}`}
           className="sunburst__svg"
           role="img"
-          aria-label="目录体积旭日图"
+          aria-label={t("scan.viz.sunburstAria")}
         >
           {arcs.map((a, i) => {
             const d = a.data;
@@ -128,8 +130,11 @@ export default function Sunburst({
         <div className="sunburst__tip" aria-hidden>
           <span className="sunburst__tip-name">{hover.name}</span>
           <span className="sunburst__tip-meta">
-            {CATEGORY_LABELS[hover.category]} · {formatBytes(hover.sizeBytes)} ·{" "}
-            {centerPct}%
+            {catLabel(hover.category)} · {formatBytes(hover.sizeBytes)} ·{" "}
+            {formatPercent((hover.sizeBytes / total) * 100)}
+          </span>
+          <span className="sunburst__tip-path mono" title={hover.path}>
+            {hover.path}
           </span>
         </div>
       )}

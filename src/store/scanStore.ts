@@ -6,6 +6,7 @@ import {
   onScanProgress,
   scanPath,
 } from "../lib/ipc";
+import { t } from "../i18n";
 import { DEFAULT_SCAN_OPTIONS } from "../lib/types";
 import type {
   ScanOptions,
@@ -14,7 +15,7 @@ import type {
   VolumeInfo,
 } from "../lib/types";
 
-export type ScanStatus = "idle" | "scanning" | "done" | "error";
+export type ScanStatus = "idle" | "scanning" | "done" | "error" | "partial";
 
 interface ScanState {
   volumes: VolumeInfo[];
@@ -39,7 +40,7 @@ function errorMessage(err: unknown): string {
   }
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
-  return "扫描失败，请重试。";
+  return t("scan.error.fallback");
 }
 
 export const useScanStore = create<ScanState>((set, get) => {
@@ -97,9 +98,8 @@ export const useScanStore = create<ScanState>((set, get) => {
         set({ result, status: "done", progress: null });
       } catch (err) {
         teardownProgress();
-        // A cancel triggers a rejected scan_path; treat it as a clean idle.
+        // A cancel flips status to "partial" or "idle" first; don't override.
         if (get().status !== "scanning") {
-          set({ progress: null });
           return;
         }
         set({ status: "error", error: errorMessage(err), progress: null });
@@ -111,7 +111,12 @@ export const useScanStore = create<ScanState>((set, get) => {
       if (status !== "scanning") return;
       // Flip status first so the in-flight scan() promise resolves quietly.
       teardownProgress();
-      set({ status: "idle", progress: null });
+      // Preserve partial progress so the UI can show what was scanned.
+      if (progress && progress.scannedFiles > 0) {
+        set({ status: "partial" });
+      } else {
+        set({ status: "idle", progress: null });
+      }
       const scanId = progress?.scanId;
       if (scanId) {
         try {

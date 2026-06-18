@@ -2,8 +2,9 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { hierarchy, treemap, treemapSquarify } from "d3-hierarchy";
 import type { HierarchyRectangularNode } from "d3-hierarchy";
 import type { DirNode } from "../../lib/types";
-import { CATEGORY_LABELS } from "../../lib/types";
-import { formatBytes } from "../../lib/format";
+import { useI18n } from "../../i18n";
+import { useCategoryLabel } from "./CategoryBar";
+import { formatBytes, formatPercent } from "../../lib/format";
 import { categoryColor } from "./CategoryBar";
 
 interface TreemapProps {
@@ -28,6 +29,8 @@ export default function Treemap({
   onDrill,
   onHoverCategory,
 }: TreemapProps) {
+  const { t } = useI18n();
+  const catLabel = useCategoryLabel();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [tip, setTip] = useState<Tip | null>(null);
@@ -70,6 +73,8 @@ export default function Treemap({
     return (root.children ?? []) as HierarchyRectangularNode<DirNode>[];
   }, [node, size]);
 
+  const total = node.sizeBytes || 1;
+
   const showTip = (e: React.MouseEvent, d: DirNode) => {
     const rect = wrapRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -90,7 +95,7 @@ export default function Treemap({
           height={size.h}
           className="treemap__svg"
           role="img"
-          aria-label="目录体积矩形树图"
+          aria-label={t("scan.viz.treemapAria")}
         >
           {leaves.map((leaf, i) => {
             const d = leaf.data;
@@ -146,8 +151,14 @@ export default function Treemap({
         >
           <span className="treemap__tip-name">{tip.node.name}</span>
           <span className="treemap__tip-meta">
-            {CATEGORY_LABELS[tip.node.category]} · {formatBytes(tip.node.sizeBytes)}
-            {tip.node.fileCount > 0 ? ` · ${tip.node.fileCount} 项` : ""}
+            {catLabel(tip.node.category)} · {formatBytes(tip.node.sizeBytes)} ·{" "}
+            {formatPercent((tip.node.sizeBytes / total) * 100)}
+            {tip.node.fileCount > 0
+              ? ` · ${t("scan.tooltip.items", { count: tip.node.fileCount })}`
+              : ""}
+          </span>
+          <span className="treemap__tip-path mono" title={tip.node.path}>
+            {tip.node.path}
           </span>
         </div>
       )}

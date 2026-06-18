@@ -738,3 +738,179 @@
     display: none;
   }
 }
+
+/* ---- B2 additions: partial state, expandable categories, tooltip paths ---- */
+
+/* Partial state (cancelled with partial data) */
+.scanview__partial {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4);
+  background: var(--surface-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+.scanview__partial-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+.scanview__partial-title {
+  font-size: var(--text-lg);
+}
+.scanview__partial-desc {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  max-width: 420px;
+}
+.scanview__partial-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+.scanview__partial-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+.scanview__partial-num {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+.scanview__partial-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.scanview__partial-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+.scanview__partial-primary {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  transition: background var(--duration-fast) var(--ease-out-expo);
+}
+.scanview__partial-primary:hover {
+  background: var(--accent-strong);
+}
+.scanview__partial-ghost {
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  transition: background var(--duration-fast) var(--ease-out-expo);
+}
+.scanview__partial-ghost:hover {
+  background: var(--surface-3);
+}
+
+/* Progress hint (partial results while scanning) */
+.scanprogress__hint {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  max-width: 420px;
+  text-align: center;
+}
+
+/* Expandable category list — override legend-item to column when open */
+.catbar__legend-item {
+  flex-direction: column;
+  align-items: stretch;
+}
+.catbar__legend-item.is-open {
+  background: var(--surface-3);
+}
+.catbar__legend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+.catbar__expand {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  line-height: 1;
+  transition: background var(--duration-fast) var(--ease-out-expo);
+}
+.catbar__expand:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.catbar__top {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: var(--space-1) 0 0;
+  width: 100%;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.catbar__top-empty {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+.catbar__top-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+.catbar__top-row:hover {
+  background: var(--surface-2);
+}
+.catbar__top-icon {
+  text-align: center;
+}
+.catbar__top-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.catbar__top-size {
+  color: var(--text-muted);
+}
+.catbar__top-pct {
+  color: var(--text-faint);
+  min-width: 44px;
+  text-align: right;
+}
+
+/* Tooltip path line */
+.treemap__tip-path,
+.sunburst__tip-path {
+  font-size: 10px;
+  color: var(--text-faint);
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

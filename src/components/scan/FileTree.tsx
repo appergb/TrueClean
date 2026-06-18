@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import type { DirNode } from "../../lib/types";
-import { CATEGORY_LABELS } from "../../lib/types";
+import { useI18n } from "../../i18n";
+import { useCategoryLabel, categoryColor } from "./CategoryBar";
 import { formatBytes, formatPercent } from "../../lib/format";
-import { categoryColor } from "./CategoryBar";
 
 interface FileTreeProps {
   /** Root node of the whole scan (for breadcrumb anchoring). */
@@ -23,6 +23,9 @@ export default function FileTree({
   onDrill,
   onNavigate,
 }: FileTreeProps) {
+  const { t } = useI18n();
+  const catLabel = useCategoryLabel();
+
   const rows = useMemo(
     () =>
       [...current.children].sort((a, b) => b.sizeBytes - a.sizeBytes),
@@ -34,7 +37,7 @@ export default function FileTree({
 
   return (
     <div className="filetree">
-      <nav className="filetree__crumbs" aria-label="目录路径">
+      <nav className="filetree__crumbs" aria-label={t("scan.filetree.crumbsLabel")}>
         {trail.map((n, i) => {
           const isLast = i === trail.length - 1;
           return (
@@ -46,7 +49,7 @@ export default function FileTree({
                 disabled={isLast}
                 title={n.path}
               >
-                {i === 0 ? n.name || "根目录" : n.name}
+                {i === 0 ? n.name || t("scan.filetree.root") : n.name}
               </button>
               {!isLast && <span className="filetree__sep" aria-hidden>›</span>}
             </span>
@@ -56,13 +59,16 @@ export default function FileTree({
 
       <div className="filetree__header">
         <span className="filetree__count">
-          {rows.length} 项 · {formatBytes(current.sizeBytes)}
+          {t("scan.filetree.count", {
+            count: rows.length,
+            size: formatBytes(current.sizeBytes),
+          })}
         </span>
       </div>
 
       <ul className="filetree__list">
         {rows.length === 0 && (
-          <li className="filetree__empty">此目录为空或无更深层数据</li>
+          <li className="filetree__empty">{t("scan.filetree.empty")}</li>
         )}
         {rows.map((child) => {
           const drillable = child.isDir && child.children.length > 0;
@@ -101,9 +107,7 @@ export default function FileTree({
                   }}
                 />
               </span>
-              <span className="filetree__cat">
-                {CATEGORY_LABELS[child.category]}
-              </span>
+              <span className="filetree__cat">{catLabel(child.category)}</span>
               <span className="filetree__size tabular">
                 {formatBytes(child.sizeBytes)}
               </span>

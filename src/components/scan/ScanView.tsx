@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useScan } from "../../hooks/useScan";
+import { useI18n } from "../../i18n";
 import type { Category, DirNode, VolumeInfo } from "../../lib/types";
 import { formatBytes, formatPercent } from "../../lib/format";
 import CategoryBar from "./CategoryBar";
@@ -23,6 +24,7 @@ function findTrail(root: DirNode, targetPath: string): DirNode[] {
 }
 
 export default function ScanView() {
+  const { t } = useI18n();
   const {
     volumes,
     volumesLoading,
@@ -33,6 +35,7 @@ export default function ScanView() {
     error,
     scan,
     cancel,
+    reset,
     loadVolumes,
   } = useScan();
 
@@ -48,8 +51,8 @@ export default function ScanView() {
 
   const trail = useMemo(() => {
     if (!result || !drillPath) return [];
-    const t = findTrail(result.tree, drillPath);
-    return t.length > 0 ? t : [result.tree];
+    const tr = findTrail(result.tree, drillPath);
+    return tr.length > 0 ? tr : [result.tree];
   }, [result, drillPath]);
 
   const currentNode = trail[trail.length - 1] ?? result?.tree ?? null;
@@ -77,18 +80,26 @@ export default function ScanView() {
     if (node) setDrillPath(node.path);
   };
 
+  const truncatedPct = useMemo(() => {
+    if (!currentNode) return 0;
+    const childrenSum = currentNode.children.reduce(
+      (s, c) => s + c.sizeBytes,
+      0,
+    );
+    if (currentNode.sizeBytes <= 0) return 0;
+    return (1 - childrenSum / currentNode.sizeBytes) * 100;
+  }, [currentNode]);
+
   return (
-    <section className="scanview" aria-label="磁盘扫描">
+    <section className="scanview" aria-label={t("scan.ariaLabel")}>
       <header className="scanview__head">
         <div>
-          <h1 className="scanview__title">磁盘扫描</h1>
-          <p className="scanview__subtitle">
-            选择磁盘或目录，可视化查看空间占用并下钻定位大文件。
-          </p>
+          <h1 className="scanview__title">{t("scan.title")}</h1>
+          <p className="scanview__subtitle">{t("scan.subtitle")}</p>
         </div>
         {status === "scanning" && (
           <button className="scanview__cancel-top" onClick={() => void cancel()}>
-            取消
+            {t("scan.cancel")}
           </button>
         )}
       </header>
@@ -96,7 +107,7 @@ export default function ScanView() {
       {/* Target picker */}
       <div className="scanview__targets">
         {volumesLoading && volumes.length === 0 && (
-          <div className="scanview__targets-loading">正在读取磁盘…</div>
+          <div className="scanview__targets-loading">{t("scan.targetsLoading")}</div>
         )}
         {volumes.map((vol) => {
           const usedPct =
@@ -114,7 +125,7 @@ export default function ScanView() {
               <div className="volcard__top">
                 <span className="volcard__name">{vol.name}</span>
                 {vol.isRemovable && (
-                  <span className="volcard__tag">可移动</span>
+                  <span className="volcard__tag">{t("scan.removable")}</span>
                 )}
               </div>
               <div className="volcard__meter" aria-hidden>
@@ -128,7 +139,7 @@ export default function ScanView() {
                   {formatBytes(vol.usedBytes)} / {formatBytes(vol.totalBytes)}
                 </span>
                 <span className="volcard__free tabular">
-                  剩 {formatBytes(vol.availableBytes)}
+                  {t("scan.free", { size: formatBytes(vol.availableBytes) })}
                 </span>
               </div>
             </button>
@@ -143,8 +154,8 @@ export default function ScanView() {
           <span className="volcard__plus" aria-hidden>
             +
           </span>
-          <span className="volcard__name">选择目录…</span>
-          <span className="volcard__hint">自定义路径扫描</span>
+          <span className="volcard__name">{t("scan.pickFolder")}</span>
+          <span className="volcard__hint">{t("scan.pickFolderHint")}</span>
         </button>
 
         {!volumesLoading && volumes.length === 0 && (
@@ -152,22 +163,23 @@ export default function ScanView() {
             className="scanview__retry"
             onClick={() => void loadVolumes()}
           >
-            重新读取磁盘
+            {t("scan.retryVolumes")}
           </button>
         )}
       </div>
 
-      {/* Body states */}
+      {/* Error state */}
       {status === "error" && (
         <div className="scanview__error" role="alert">
-          <strong>扫描失败</strong>
-          <span>{error ?? "未知错误"}</span>
+          <strong>{t("scan.error.title")}</strong>
+          <span>{error ?? t("scan.error.unknown")}</span>
           {target && (
-            <button onClick={() => void scan(target)}>重试</button>
+            <button onClick={() => void scan(target)}>{t("scan.retry")}</button>
           )}
         </div>
       )}
 
+      {/* Loading / in-progress state */}
       {status === "scanning" && (
         <ScanProgress
           progress={progress}
@@ -176,15 +188,61 @@ export default function ScanView() {
         />
       )}
 
-      {status === "idle" && !result && (
-        <div className="scanview__empty">
-          <div className="scanview__empty-art" aria-hidden>
-            ◎
+      {/* Partial state (cancelled with partial data) */}
+      {status === "partial" && progress && (
+        <div className="scanview__partial" role="status">
+          <div className="scanview__partial-head">
+            <h2 className="scanview__partial-title">{t("scan.partial.title")}</h2>
+            <p className="scanview__partial-desc">{t("scan.partial.desc")}</p>
           </div>
-          <p>选择上方磁盘或目录开始扫描。</p>
+          <div className="scanview__partial-stats">
+            <div className="scanview__partial-stat">
+              <span className="scanview__partial-num tabular">
+                {progress.scannedFiles.toLocaleString()}
+              </span>
+              <span className="scanview__partial-label">
+                {t("scan.partial.scannedFiles")}
+              </span>
+            </div>
+            <div className="scanview__partial-stat">
+              <span className="scanview__partial-num tabular">
+                {formatBytes(progress.scannedBytes)}
+              </span>
+              <span className="scanview__partial-label">
+                {t("scan.partial.scannedBytes")}
+              </span>
+            </div>
+          </div>
+          <div className="scanview__partial-actions">
+            {target && (
+              <button
+                className="scanview__partial-primary"
+                onClick={() => void scan(target)}
+              >
+                {t("scan.partial.rescan")}
+              </button>
+            )}
+            <button
+              className="scanview__partial-ghost"
+              onClick={() => reset()}
+            >
+              {t("scan.partial.clear")}
+            </button>
+          </div>
         </div>
       )}
 
+      {/* Empty state */}
+      {status === "idle" && !result && (
+        <div className="scanview__empty">
+          <div className="scanview__empty-art" aria-hidden>
+            {t("scan.empty.art")}
+          </div>
+          <p>{t("scan.empty.text")}</p>
+        </div>
+      )}
+
+      {/* Result state */}
       {status === "done" && result && currentNode && (
         <div className="scanview__result">
           <div className="scanview__summary">
@@ -193,17 +251,19 @@ export default function ScanView() {
                 {formatBytes(result.breakdown.totalBytes)}
               </span>
               <span className="scanview__summary-label">
-                共扫描 {result.breakdown.scannedFiles.toLocaleString()} 个文件
+                {t("scan.result.scannedFiles", {
+                  count: result.breakdown.scannedFiles.toLocaleString(),
+                })}
               </span>
             </div>
-            <div className="seg" role="tablist" aria-label="可视化模式">
+            <div className="seg" role="tablist" aria-label={t("scan.viz.modeLabel")}>
               <button
                 role="tab"
                 aria-selected={viz === "treemap"}
                 className={`seg__btn${viz === "treemap" ? " is-active" : ""}`}
                 onClick={() => setViz("treemap")}
               >
-                矩形树图
+                {t("scan.viz.treemap")}
               </button>
               <button
                 role="tab"
@@ -211,13 +271,14 @@ export default function ScanView() {
                 className={`seg__btn${viz === "sunburst" ? " is-active" : ""}`}
                 onClick={() => setViz("sunburst")}
               >
-                旭日图
+                {t("scan.viz.sunburst")}
               </button>
             </div>
           </div>
 
           <CategoryBar
             breakdown={result.breakdown}
+            tree={result.tree}
             active={hoverCat}
             onHover={setHoverCat}
           />
@@ -249,20 +310,10 @@ export default function ScanView() {
 
           {currentNode.truncatedChildren > 0 && (
             <p className="scanview__truncated">
-              为保持性能，此目录另有 {currentNode.truncatedChildren} 个较小项未单独展开
-              （已计入合计，约占{" "}
-              {formatPercent(
-                currentNode.sizeBytes > 0
-                  ? (1 -
-                      currentNode.children.reduce(
-                        (s, c) => s + c.sizeBytes,
-                        0,
-                      ) /
-                        currentNode.sizeBytes) *
-                      100
-                  : 0,
-              )}
-              ）。
+              {t("scan.result.truncated", {
+                count: currentNode.truncatedChildren,
+                pct: formatPercent(truncatedPct),
+              })}
             </p>
           )}
         </div>
