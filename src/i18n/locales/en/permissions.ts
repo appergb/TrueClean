@@ -1,4 +1,4 @@
-// Permissions namespace — shared by PermissionGuide and SettingsPanel.
+// Permissions namespace — shared by PermissionGuide, PermissionGate and SettingsPanel.
 // Access via t('permissions.<key>').
 
 export const permissions = {
@@ -19,6 +19,18 @@ export const permissions = {
   installed: "Installed",
   notInstalled: "Not installed",
   openSettings: "Open Settings",
+  // PermissionGate — first-launch permission gate
+  gateTitle: "Authorize TrueClean",
+  gateSub: "TrueClean needs the following permissions to fully scan and clean your disk. Grant them one by one to continue.",
+  gateStep: "Step {n}/{total}",
+  gateContinue: "Continue",
+  gateContinueHint: "All required permissions granted",
+  gateWaiting: "Waiting for authorization…",
+  gateWaitingHint: "Click Re-check after granting",
+  // Helper installation
+  installHelper: "Install Helper",
+  installingHelper: "Installing…",
+  helperInstallHint: "Click to open the system password prompt; enter your admin password to install",
 } as const;
 
 export default permissions;

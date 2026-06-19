@@ -2,22 +2,30 @@
 // 通过 ipc 调用后端命令刷新，供 PermissionGuide 与 SettingsPanel 使用。
 import { create } from "zustand";
 
-import { getHelperStatus, getPermissionStatus, openSystemPermissionSettings } from "../lib/ipc";
+import {
+  getHelperStatus,
+  getPermissionStatus,
+  installPrivilegedHelper,
+  openSystemPermissionSettings,
+} from "../lib/ipc";
 import type { HelperStatus, PermissionStatus } from "../lib/types";
 
 interface PermissionState {
   status: PermissionStatus | null;
   helper: HelperStatus | null;
   loading: boolean;
+  installingHelper: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   openSettings: (type: string) => Promise<void>;
+  installHelper: () => Promise<boolean>;
 }
 
-export const usePermissions = create<PermissionState>((set) => ({
+export const usePermissions = create<PermissionState>((set, get) => ({
   status: null,
   helper: null,
   loading: false,
+  installingHelper: false,
   error: null,
   refresh: async () => {
     set({ loading: true, error: null });
@@ -36,6 +44,19 @@ export const usePermissions = create<PermissionState>((set) => ({
       await openSystemPermissionSettings(type);
     } catch (e) {
       set({ error: String(e) });
+    }
+  },
+  installHelper: async () => {
+    set({ installingHelper: true, error: null });
+    try {
+      await installPrivilegedHelper();
+      // 安装成功后刷新 helper 状态。
+      await get().refresh();
+      set({ installingHelper: false });
+      return true;
+    } catch (e) {
+      set({ installingHelper: false, error: String(e) });
+      return false;
     }
   },
 }));

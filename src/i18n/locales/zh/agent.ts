@@ -7,10 +7,27 @@ export const agent = {
   close: "关闭助手面板",
   scrollBottom: "滚动到底部",
 
+  // AgentPanel 面板标识与状态
+  panel: {
+    title: "TrueClean Agent",
+    subtitle: "磁盘清理与系统优化专家",
+    expand: "展开助手",
+    collapse: "收起助手",
+    working: "工作中…",
+    ready: "就绪",
+  },
+
+  // 底部状态栏
+  status: {
+    auto: "auto",
+    autoHint: "自动模式：agent 先规划后执行，破坏性操作需你确认",
+  },
+
   empty: {
     badge: "✦",
     title: "我是 TrueClean 清理助手",
     sub: "我可以扫描磁盘、找出垃圾与大文件，并帮你安全地释放空间。",
+    greeting: "你好，我是 TrueClean Agent。告诉我你想清理什么，我会先扫描再给你分级建议。",
     suggestions: [
       "帮我看看能清理多少空间",
       "找出超过 1GB 的大文件",
@@ -46,6 +63,7 @@ export const agent = {
     highlights: "关键发现",
     noResult: "等待结果…",
     truncated: "（内容过长已裁剪）",
+    calling: "正在调用 {name}…",
   },
 
   dataNature: {
@@ -72,6 +90,11 @@ export const agent = {
     irreversible: "此操作不可恢复，请谨慎确认。",
   },
 
+  review: {
+    approved: "审核通过",
+    rejected: "审核拒绝",
+  },
+
   suggestion: {
     cleanNow: "可立即清理",
     review: "建议复核",
@@ -84,6 +107,12 @@ export const agent = {
 
   error: {
     default: "对话出错了，请重试。",
+  },
+
+  typing: "正在输入",
+
+  toolCall: {
+    itemCount: "{count} 项",
   },
 } as const;
 

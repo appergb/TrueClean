@@ -1,15 +1,12 @@
-import type { Theme } from "../../hooks/useTheme";
-import type { Locale } from "../../i18n";
 import { useI18n } from "../../i18n";
 import { useScanStore } from "../../store/scanStore";
 
 interface TopBarProps {
-  theme: Theme;
-  onToggleTheme: () => void;
+  onOpenSettings: () => void;
 }
 
-/** Lens logo SVG — indigo→teal arc + teal core. Used in top bar + AI header. */
-export const LensLogo = ({ size = 15 }: { size?: number }) => (
+/** TrueClean 应用图标 — 用于顶栏品牌区。 */
+export const AppLogo = ({ size = 18 }: { size?: number }) => (
   <svg
     width={size}
     height={size}
@@ -17,91 +14,82 @@ export const LensLogo = ({ size = 15 }: { size?: number }) => (
     fill="none"
     aria-hidden="true"
   >
-    <circle cx="12" cy="12" r="8.4" stroke="var(--border-faint)" strokeWidth="1.6" />
+    {/* 外圈 — 扫描镜头 */}
+    <circle cx="12" cy="12" r="9" stroke="var(--border-faint)" strokeWidth="1.4" />
+    {/* 扫描弧 — 靛蓝 */}
     <path
-      d="M12 3.6 A8.4 8.4 0 0 1 20 9.2"
+      d="M12 3 A9 9 0 0 1 21 12"
       stroke="var(--accent)"
       strokeWidth="2"
       strokeLinecap="round"
     />
+    {/* 扫描弧 — 青色 */}
     <path
-      d="M20.4 11.2 A8.4 8.4 0 0 1 15.6 19.6"
+      d="M21 12 A9 9 0 0 1 16.5 19.8"
       stroke="var(--accent-strong)"
       strokeWidth="2"
       strokeLinecap="round"
     />
-    <circle cx="12" cy="12" r="2.6" fill="var(--accent-strong)" />
+    {/* 中心点 */}
+    <circle cx="12" cy="12" r="2.4" fill="var(--accent-strong)" />
   </svg>
 );
 
-const LANG_OPTIONS: { value: Locale; label: string }[] = [
-  { value: "zh", label: "中" },
-  { value: "en", label: "EN" },
-];
-
 /**
- * Space Lens top bar (52px).
+ * TrueClean 顶栏（52px）— 红绿灯悬浮模式下与窗口一整块，无横杠。
  *
- * Left: lens logo + "空间透镜" + Space Lens mono tag.
- * Right: green disk-online dot + disk name (mono) + slim locale toggle.
+ * 左：应用图标 + TrueClean 名称。
+ * 右：磁盘在线状态 + 重新扫描按钮 + 设置齿轮。
  *
- * The disk name comes from the active scan target, falling back to the first
- * volume, then to the brand tag. The theme toggle is kept accessible via the
- * locale control row (double-duty: click = locale, long-press = theme) — but
- * Space Lens is dark-first so no visible theme button is shown per design ref.
+ * 语言切换与主题切换已移至设置面板，顶栏不再显示。
  */
-export function TopBar({ theme, onToggleTheme }: TopBarProps) {
-  const { t, locale, setLocale } = useI18n();
-  const target = useScanStore((s) => s.target);
+export function TopBar({ onOpenSettings }: TopBarProps) {
+  const { t } = useI18n();
+  const scanTarget = useScanStore((s) => s.scanTarget);
+  const status = useScanStore((s) => s.status);
   const volumes = useScanStore((s) => s.volumes);
+  const resetScan = useScanStore((s) => s.reset);
 
   const diskName =
-    target ||
+    scanTarget ||
     volumes[0]?.name ||
     volumes[0]?.mountPoint ||
-    t("lens.brand.tag");
+    t("shell.brand.tag");
+
+  const showRescan = status === "done" || status === "partial";
 
   return (
     <header className="tc-topbar">
       <div className="tc-topbar__brand">
         <span className="tc-topbar__logo">
-          <LensLogo size={15} />
+          <AppLogo size={18} />
         </span>
-        <span className="tc-topbar__name">{t("lens.brand.name")}</span>
-        <span className="tc-topbar__tag">{t("lens.brand.tag")}</span>
+        <span className="tc-topbar__name">TrueClean</span>
       </div>
 
       <div className="tc-topbar__status">
         <span className="tc-topbar__dot" aria-hidden="true" />
         <span className="tc-topbar__disk">{diskName}</span>
 
+        {showRescan && (
+          <button
+            type="button"
+            className="tc-topbar__rescan"
+            onClick={resetScan}
+            aria-label={t("lens.topbar.rescan")}
+          >
+            {t("lens.topbar.rescan")}
+          </button>
+        )}
+
         <span className="tc-topbar__sep-v" aria-hidden="true" />
 
-        <div className="tc-topbar__locale" role="group" aria-label={t("shell.topbar.language")}>
-          {LANG_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              className={`tc-topbar__locale-btn${locale === opt.value ? " is-active" : ""}`}
-              onClick={() => setLocale(opt.value)}
-              aria-pressed={locale === opt.value}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Hidden theme toggle — keeps useTheme wired without cluttering the bar.
-            Double-click the locale group to flip theme (power-user affordance). */}
+        {/* 设置齿轮按钮 — 打开设置面板（含语言/主题/AI/扫描/权限） */}
         <button
           type="button"
-          className="tc-topbar__theme-toggle"
-          aria-label={
-            theme === "dark"
-              ? t("shell.topbar.themeToLight")
-              : t("shell.topbar.themeToDark")
-          }
-          onClick={onToggleTheme}
+          className="tc-topbar__settings"
+          onClick={onOpenSettings}
+          aria-label={t("settings.title")}
         >
           <svg
             width="14"
@@ -114,14 +102,8 @@ export function TopBar({ theme, onToggleTheme }: TopBarProps) {
             strokeLinejoin="round"
             aria-hidden="true"
           >
-            {theme === "dark" ? (
-              <>
-                <circle cx="12" cy="12" r="4" />
-                <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-              </>
-            ) : (
-              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
-            )}
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </button>
       </div>

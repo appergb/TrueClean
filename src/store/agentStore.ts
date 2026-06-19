@@ -6,8 +6,11 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { emit } from "@tauri-apps/api/event";
 import { create } from "zustand";
 
+import { t } from "../i18n";
 import { agentCancel, agentChat, onAgentEvent } from "../lib/ipc";
 import type { AgentEvent, ChatMessage } from "../lib/types";
+import { useCleanStore } from "./cleanStore";
+import { useScanStore } from "./scanStore";
 
 export type AgentStatus = "idle" | "streaming";
 
@@ -35,6 +38,16 @@ export interface ConfirmationRequest {
   summary: string;
 }
 
+/** An independent review Agent's verdict on a proposed deletion path list.
+ *  Surfaced before the confirmation dialog so the user sees both the
+ *  automated review and can make an informed choice. */
+export interface ReviewEvent {
+  pathCount: number;
+  approved: boolean;
+  summary: string;
+  flaggedPaths: string[];
+}
+
 interface AgentState {
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -43,6 +56,7 @@ interface AgentState {
   messages: ChatMessage[];
   events: ToolEvent[];
   confirmations: ConfirmationRequest[];
+  reviews: ReviewEvent[];
   status: AgentStatus;
   error: string | null;
 
@@ -86,6 +100,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   messages: [],
   events: [],
   confirmations: [],
+  reviews: [],
   status: "idle",
   error: null,
 
@@ -169,6 +184,35 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           }));
           break;
         }
+        case "selection": {
+          // Agent 圈选了路径，更新 cleanStore.checked 让 UI 高亮标记。
+          // 用户可以在 BubbleMap/CategoryBar 上看到圈选的路径并确认或取消。
+          const paths = event.paths;
+          if (paths.length > 0) {
+            const cleanStore = useCleanStore.getState();
+            // 将圈选的路径添加到 checked（不覆盖已有的勾选）。
+            const next = { ...cleanStore.checked };
+            for (const p of paths) next[p] = true;
+            useCleanStore.setState({ checked: next });
+          }
+          break;
+        }
+        case "review": {
+          // 独立审核 Agent 给出了清理路径列表的审核结论。
+          // 追加到 reviews 列表，UI 在确认对话框上方展示审核结论。
+          set((s) => ({
+            reviews: [
+              ...s.reviews,
+              {
+                pathCount: event.pathCount,
+                approved: event.approved,
+                summary: event.summary,
+                flaggedPaths: event.flaggedPaths,
+              },
+            ],
+          }));
+          break;
+        }
         case "done": {
           set({ status: "idle" });
           void teardown();
@@ -193,7 +237,9 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     try {
       // Subscribe before invoking so no early deltas are missed.
       unlisten = await onAgentEvent(sessionId, handler);
-      await agentChat(sessionId, outbound);
+      // 从 scanStore 读取当前扫描目标，作为 agent 的工作目录注入系统提示词。
+      const scanTarget = useScanStore.getState().scanTarget;
+      await agentChat(sessionId, outbound, scanTarget);
     } catch (err) {
       if (activeSessionId === sessionId) {
         set({ status: "idle", error: messageFromError(err) });
@@ -207,7 +253,15 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     if (!sessionId) return;
     // Detach immediately so late events are ignored, then tell the backend.
     void teardown();
-    set({ status: "idle", confirmations: [] });
+    set((s) => {
+      const next = s.messages.slice();
+      const last = next[next.length - 1];
+      // Drop an empty assistant bubble so it does not linger blank.
+      if (last && last.role === "assistant" && !last.content) {
+        next.splice(next.length - 1, 1);
+      }
+      return { messages: next, status: "idle", confirmations: [] };
+    });
     void agentCancel(sessionId).catch(() => {
       // best-effort: backend may have already finished
     });
@@ -215,7 +269,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   reset: () => {
     get().cancel();
-    set({ messages: [], events: [], confirmations: [], status: "idle", error: null });
+    set({ messages: [], events: [], confirmations: [], reviews: [], status: "idle", error: null });
   },
 
   confirm: (id, approved) => {
@@ -237,5 +291,5 @@ function messageFromError(err: unknown): string {
     if (typeof m === "string") return m;
   }
   if (err instanceof Error) return err.message;
-  return "对话出错了，请重试。";
+  return t("agent.error.default");
 }

@@ -1,468 +1,581 @@
-import "./settings.css";
-
-import { useEffect, useState } from "react";
+// 设置面板 — 模态对话框，包含 AI 助手、扫描选项、清理行为、外观、权限状态五区。
+// 复用 settings.css 的 .set-* 类，叠加模态层样式。Focus trap + Escape 关闭。
+import { useEffect, useRef, useState } from "react";
 
 import { usePermissions } from "../../hooks/usePermissions";
-import { useI18n, useLocaleStore } from "../../i18n";
-import type { AppSettings } from "../../lib/types";
+import type { Theme } from "../../hooks/useTheme";
+import { useI18n } from "../../i18n";
+import type { Locale } from "../../i18n/localeStore";
+import type { AppSettings, ScanOptions } from "../../lib/types";
 import { useSettingsStore } from "../../store/settingsStore";
-import { PermissionGuide } from "../layout/PermissionGuide";
-import Button from "../ui/Button";
-import { useToast } from "../ui/Toast";
 
-const DEFAULT_MODELS: Record<AppSettings["provider"], string> = {
-  claude: "claude-sonnet-4-6",
-  openai: "gpt-4o",
-  ollama: "llama3.1",
-};
-
-function isValidHttpUrl(value: string): boolean {
-  try {
-    const u = new URL(value);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
+interface SettingsPanelProps {
+  open: boolean;
+  onClose: () => void;
+  theme: Theme;
+  onToggleTheme: () => void;
 }
 
-interface ValidationErrors {
-  key?: string;
-  url?: string;
-}
+const PROVIDERS = [
+  { value: "claude", key: "settings.aiSection.providerClaude" },
+  { value: "openai", key: "settings.aiSection.providerOpenai" },
+  { value: "deepseek", key: "settings.aiSection.providerDeepseek" },
+  { value: "ollama", key: "settings.aiSection.providerOllama" },
+] as const;
 
-function validate(
-  settings: AppSettings,
-  t: (k: string, p?: Record<string, string | number>) => string,
-): ValidationErrors {
-  const errors: ValidationErrors = {};
-  if (settings.provider === "claude" && !settings.claudeApiKey.trim()) {
-    errors.key = t("cleanup.settings.validationKeyRequired");
-  }
-  if (settings.provider === "openai" && !settings.openaiApiKey.trim()) {
-    errors.key = t("cleanup.settings.validationKeyRequired");
-  }
-  if (settings.provider === "ollama") {
-    if (!settings.ollamaBaseUrl.trim()) {
-      errors.url = t("cleanup.settings.validationUrlRequired");
-    } else if (!isValidHttpUrl(settings.ollamaBaseUrl)) {
-      errors.url = t("cleanup.settings.validationUrlInvalid");
+/**
+ * 设置面板模态框。加载时从 settingsStore 读取当前设置，用户编辑后点击保存
+ * 持久化。语言切换即时生效（同步 localeStore + AppSettings）。
+ */
+export function SettingsPanel({ open, onClose, theme, onToggleTheme }: SettingsPanelProps) {
+  const { t, locale, setLocale } = useI18n();
+  const { settings, loading, saving, save } = useSettingsStore();
+  const { status, helper, refresh, openSettings: openPermSettings } = usePermissions();
+
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState<AppSettings | null>(null);
+  const [showClaudeKey, setShowClaudeKey] = useState(false);
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [showDeepseekKey, setShowDeepseekKey] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+
+  // 打开面板时，用当前设置初始化草稿。
+  useEffect(() => {
+    if (open && settings) {
+      setDraft({ ...settings });
     }
-  }
-  return errors;
-}
+  }, [open, settings]);
 
-export default function SettingsPanel() {
-  const { t } = useI18n();
-  const toast = useToast();
-  const setLocale = useLocaleStore((s) => s.setLocale);
-  const { settings, loading, saving, error, load, update, save } =
-    useSettingsStore();
-  const {
-    status: permStatus,
-    helper: permHelper,
-    loading: permLoading,
-    refresh: refreshPerms,
-    openSettings: openPermSettings,
-  } = usePermissions();
-  const [saved, setSaved] = useState(false);
-  const [showKey, setShowKey] = useState(false);
-  const [validation, setValidation] = useState<ValidationErrors>({});
-  const [testing, setTesting] = useState(false);
-
+  // Focus trap + Escape 关闭。
   useEffect(() => {
-    if (!settings && !loading) void load();
-  }, [settings, loading, load]);
+    if (!open) return;
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
 
-  // Sync locale store when settings language changes or loads.
-  useEffect(() => {
-    if (settings?.language) setLocale(settings.language);
-  }, [settings?.language, setLocale]);
+    const focusables = () =>
+      Array.from(
+        overlay.querySelectorAll<HTMLElement>(
+          'button, a, input, textarea, select, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled"));
 
-  // 加载权限状态
-  useEffect(() => {
-    void refreshPerms();
-  }, [refreshPerms]);
+    const initial = focusables()[0];
+    initial?.focus();
 
-  const runValidation = (): boolean => {
-    if (!settings) return false;
-    const errors = validate(settings, t);
-    setValidation(errors);
-    return Object.keys(errors).length === 0;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || !overlay.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    overlay.addEventListener("keydown", onKeyDown);
+    return () => {
+      overlay.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [open, onClose]);
+
+  if (!open || !draft) return null;
+
+  const update = (patch: Partial<AppSettings>) => {
+    setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
-  const onSave = async () => {
-    if (!settings) return;
-    if (!runValidation()) {
-      toast.error(t("cleanup.settings.validationKeyRequired"));
-      return;
-    }
-    setSaved(false);
-    try {
-      await save(settings);
-      setSaved(true);
-      toast.success(t("cleanup.settings.saved"));
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast.error(t("cleanup.settings.saveFailed", { error: msg }));
-    }
-  };
-
-  const handleTestConnection = async () => {
-    if (!settings) return;
-    if (!runValidation()) {
-      toast.error(
-        t("cleanup.settings.testFail", {
-          error: validation.key ?? validation.url ?? "",
-        }),
-      );
-      return;
-    }
-    setTesting(true);
-    // No IPC test endpoint exists — do frontend format validation only.
-    await new Promise((r) => setTimeout(r, 400));
-    setTesting(false);
-    if (settings.provider === "ollama") {
-      toast.success(t("cleanup.settings.testOk"), settings.ollamaBaseUrl);
-    } else {
-      const key =
-        settings.provider === "claude"
-          ? settings.claudeApiKey
-          : settings.openaiApiKey;
-      toast.success(t("cleanup.settings.testOk"), key.slice(0, 6) + "…");
-    }
-  };
-
-  if (loading || !settings) {
-    return (
-      <section className="set">
-        <div className="set-state">
-          <div className="set-spinner" />
-          <p>{t("cleanup.settings.loading")}</p>
-        </div>
-      </section>
+  const updateScanOptions = (patch: Partial<ScanOptions>) => {
+    setDraft((prev) =>
+      prev ? { ...prev, scanOptions: { ...prev.scanOptions, ...patch } } : prev,
     );
-  }
+  };
 
-  const provider = settings.provider;
-  const hasKeyField = provider === "claude" || provider === "openai";
-  const currentKey =
-    provider === "claude" ? settings.claudeApiKey : settings.openaiApiKey;
-  const canTest =
-    !testing &&
-    (provider === "ollama"
-      ? settings.ollamaBaseUrl.trim().length > 0
-      : hasKeyField && currentKey.trim().length > 0);
+  const handleSave = async () => {
+    if (!draft) return;
+    setSaveStatus("saving");
+    try {
+      await save(draft);
+      // 同步语言到 localeStore
+      if (draft.language !== locale) {
+        setLocale(draft.language as Locale);
+      }
+      setSaveStatus("saved");
+      window.setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch {
+      setSaveStatus("idle");
+    }
+  };
+
+  const handleLanguageChange = (lang: Locale) => {
+    setLocale(lang);
+    update({ language: lang });
+  };
+
+  const isLoading = loading || !settings;
 
   return (
-    <section className="set">
-      <header className="set-head">
-        <h2 className="set-title">{t("cleanup.settings.title")}</h2>
-        <p className="set-sub">{t("cleanup.settings.sub")}</p>
-      </header>
-
-      <div className="set-section">
-        <h3 className="set-section__title">
-          {t("permissions.sectionTitle")}
-        </h3>
-        <p className="set-field__hint">{t("permissions.sectionSub")}</p>
-
-        <PermissionGuide compact />
-
-        <div className="set-toggle">
-          <span className="set-field__label">
-            {t("permissions.fullDiskAccess")}
-          </span>
-          <span
-            className={`set-status ${
-              permStatus?.fullDiskAccess ? "set-status--ok" : "set-status--err"
-            }`}
-          >
-            {permStatus
-              ? permStatus.fullDiskAccess
-                ? t("permissions.granted")
-                : t("permissions.notGranted")
-              : "—"}
-          </span>
-        </div>
-
-        <div className="set-toggle">
-          <span className="set-field__label">
-            {t("permissions.adminLabel")}
-          </span>
-          <span
-            className={`set-status ${
-              permStatus?.isAdmin ? "set-status--ok" : "set-status--err"
-            }`}
-          >
-            {permStatus
-              ? permStatus.isAdmin
-                ? t("permissions.granted")
-                : t("permissions.notGranted")
-              : "—"}
-          </span>
-        </div>
-
-        <div className="set-toggle">
-          <span className="set-field__label">
-            {t("permissions.helperLabel")}
-          </span>
-          <span
-            className={`set-status ${
-              permHelper?.installed ? "set-status--ok" : "set-status--err"
-            }`}
-          >
-            {permHelper
-              ? permHelper.installed
-                ? t("permissions.installed")
-                : t("permissions.notInstalled")
-              : "—"}
-          </span>
-        </div>
-
-        <div className="set-row">
-          <Button
-            variant="subtle"
-            onClick={() => void refreshPerms()}
-            disabled={permLoading}
-          >
-            {t("permissions.recheck")}
-          </Button>
-          {permStatus?.platform === "macos" && !permStatus.fullDiskAccess && (
-            <Button
-              variant="primary"
-              onClick={() => void openPermSettings("full_disk_access")}
-            >
-              {t("permissions.openSettings")}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="set-section">
-        <h3 className="set-section__title">{t("cleanup.settings.aiSection")}</h3>
-
-        <div className="set-field">
-          <label className="set-field__label" htmlFor="set-provider">
-            {t("cleanup.settings.provider")}
-          </label>
-          <select
-            id="set-provider"
-            className="set-select"
-            value={provider}
-            onChange={(e) => {
-              const next = e.target.value as AppSettings["provider"];
-              const modelIsDefault =
-                settings.model === "" ||
-                Object.values(DEFAULT_MODELS).includes(settings.model);
-              update({
-                provider: next,
-                ...(modelIsDefault ? { model: DEFAULT_MODELS[next] } : {}),
-              });
-              setSaved(false);
-              setValidation({});
-            }}
-          >
-            <option value="claude">{t("cleanup.settings.providerClaude")}</option>
-            <option value="openai">{t("cleanup.settings.providerOpenai")}</option>
-            <option value="ollama">{t("cleanup.settings.providerOllama")}</option>
-          </select>
-        </div>
-
-        <div className="set-field">
-          <label className="set-field__label" htmlFor="set-model">
-            {t("cleanup.settings.model")}
-          </label>
-          <input
-            id="set-model"
-            className="set-input"
-            value={settings.model}
-            placeholder={DEFAULT_MODELS[provider]}
-            onChange={(e) => {
-              update({ model: e.target.value });
-              setSaved(false);
-            }}
-          />
-        </div>
-
-        {provider === "claude" && (
-          <div className="set-field">
-            <label className="set-field__label" htmlFor="set-claude-key">
-              {t("cleanup.settings.claudeKey")}
-            </label>
-            <div className="set-keyrow">
-              <input
-                id="set-claude-key"
-                type={showKey ? "text" : "password"}
-                className="set-input"
-                autoComplete="off"
-                value={settings.claudeApiKey}
-                placeholder="sk-ant-…"
-                onChange={(e) => {
-                  update({ claudeApiKey: e.target.value });
-                  setSaved(false);
-                  setValidation({});
-                }}
-              />
-              <button
-                type="button"
-                className="set-keytoggle"
-                onClick={() => setShowKey((v) => !v)}
-                aria-label={
-                  showKey
-                    ? t("cleanup.settings.keyHide")
-                    : t("cleanup.settings.keyShow")
-                }
-              >
-                {showKey
-                  ? t("cleanup.settings.keyHide")
-                  : t("cleanup.settings.keyShow")}
-              </button>
-            </div>
-            {validation.key && (
-              <span className="set-error">{validation.key}</span>
-            )}
-          </div>
-        )}
-
-        {provider === "openai" && (
-          <div className="set-field">
-            <label className="set-field__label" htmlFor="set-openai-key">
-              {t("cleanup.settings.openaiKey")}
-            </label>
-            <div className="set-keyrow">
-              <input
-                id="set-openai-key"
-                type={showKey ? "text" : "password"}
-                className="set-input"
-                autoComplete="off"
-                value={settings.openaiApiKey}
-                placeholder="sk-…"
-                onChange={(e) => {
-                  update({ openaiApiKey: e.target.value });
-                  setSaved(false);
-                  setValidation({});
-                }}
-              />
-              <button
-                type="button"
-                className="set-keytoggle"
-                onClick={() => setShowKey((v) => !v)}
-                aria-label={
-                  showKey
-                    ? t("cleanup.settings.keyHide")
-                    : t("cleanup.settings.keyShow")
-                }
-              >
-                {showKey
-                  ? t("cleanup.settings.keyHide")
-                  : t("cleanup.settings.keyShow")}
-              </button>
-            </div>
-            {validation.key && (
-              <span className="set-error">{validation.key}</span>
-            )}
-          </div>
-        )}
-
-        {provider === "ollama" && (
-          <div className="set-field">
-            <label className="set-field__label" htmlFor="set-ollama-url">
-              {t("cleanup.settings.ollamaUrl")}
-            </label>
-            <input
-              id="set-ollama-url"
-              className="set-input"
-              value={settings.ollamaBaseUrl}
-              placeholder="http://localhost:11434"
-              onChange={(e) => {
-                update({ ollamaBaseUrl: e.target.value });
-                setSaved(false);
-                setValidation({});
-              }}
-            />
-            {validation.url && (
-              <span className="set-error">{validation.url}</span>
-            )}
-          </div>
-        )}
-
-        <div className="set-row">
-          <Button
-            variant="subtle"
-            onClick={() => void handleTestConnection()}
-            disabled={!canTest}
-          >
-            {testing
-              ? t("cleanup.settings.testing")
-              : t("cleanup.settings.testConnection")}
-          </Button>
-          <p className="set-note">{t("cleanup.settings.keyHint")}</p>
-        </div>
-      </div>
-
-      <div className="set-section">
-        <h3 className="set-section__title">
-          {t("cleanup.settings.behaviorSection")}
-        </h3>
-
-        <div className="set-toggle">
-          <div className="set-toggle__text">
-            <span className="set-field__label">
-              {t("cleanup.settings.defaultToTrash")}
-            </span>
-            <span className="set-field__hint">
-              {t("cleanup.settings.defaultToTrashHint")}
-            </span>
+    <div
+      ref={overlayRef}
+      className="tc-settings-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tc-settings-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="tc-settings">
+        <div className="tc-settings__head">
+          <div>
+            <h2 id="tc-settings-title" className="tc-settings__title">
+              {t("settings.title")}
+            </h2>
+            <p className="tc-settings__sub">{t("settings.subtitle")}</p>
           </div>
           <button
             type="button"
-            className="set-switch"
-            role="switch"
-            aria-checked={settings.defaultToTrash}
-            aria-label={t("cleanup.settings.defaultToTrash")}
-            onClick={() => {
-              update({ defaultToTrash: !settings.defaultToTrash });
-              setSaved(false);
-            }}
-          />
-        </div>
-
-        <div className="set-field">
-          <label className="set-field__label" htmlFor="set-language">
-            {t("cleanup.settings.language")}
-          </label>
-          <select
-            id="set-language"
-            className="set-select"
-            value={settings.language}
-            onChange={(e) => {
-              const lang = e.target.value as AppSettings["language"];
-              update({ language: lang });
-              setLocale(lang);
-              setSaved(false);
-            }}
+            className="tc-settings__close"
+            onClick={onClose}
+            aria-label={t("settings.close")}
           >
-            <option value="zh">{t("cleanup.settings.languageZh")}</option>
-            <option value="en">{t("cleanup.settings.languageEn")}</option>
-          </select>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div className="set-state">
+            <div className="set-spinner" />
+          </div>
+        ) : (
+          <div className="tc-settings__body">
+            <div className="set">
+              {/* ---- AI 助手 ---- */}
+              <section className="set-section">
+                <h3 className="set-section__title">{t("settings.aiSection.title")}</h3>
+                <p className="set-field__hint">{t("settings.aiSection.sub")}</p>
+
+                <div className="set-field">
+                  <label className="set-field__label" htmlFor="set-provider">
+                    {t("settings.aiSection.provider")}
+                  </label>
+                  <select
+                    id="set-provider"
+                    className="set-select"
+                    value={draft.provider}
+                    onChange={(e) => update({ provider: e.target.value as AppSettings["provider"] })}
+                  >
+                    {PROVIDERS.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {t(p.key)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="set-field">
+                  <label className="set-field__label" htmlFor="set-model">
+                    {t("settings.aiSection.model")}
+                  </label>
+                  <input
+                    id="set-model"
+                    className="set-input"
+                    type="text"
+                    value={draft.model}
+                    onChange={(e) => update({ model: e.target.value })}
+                    placeholder={t("settings.aiSection.modelHint")}
+                  />
+                </div>
+
+                {draft.provider === "claude" && (
+                  <>
+                    <div className="set-field">
+                      <label className="set-field__label" htmlFor="set-claude-key">
+                        {t("settings.aiSection.claudeKey")}
+                      </label>
+                      <div className="set-keyrow">
+                        <input
+                          id="set-claude-key"
+                          className="set-input"
+                          type={showClaudeKey ? "text" : "password"}
+                          value={draft.claudeApiKey}
+                          onChange={(e) => update({ claudeApiKey: e.target.value })}
+                          placeholder={t("settings.aiSection.keyHint")}
+                        />
+                        <button
+                          type="button"
+                          className="set-keytoggle"
+                          onClick={() => setShowClaudeKey((v) => !v)}
+                        >
+                          {showClaudeKey ? t("settings.aiSection.hideKey") : t("settings.aiSection.showKey")}
+                        </button>
+                      </div>
+                      <span className="set-field__hint">
+                        {draft.claudeApiKey === "********"
+                          ? t("settings.aiSection.keyStored")
+                          : t("settings.aiSection.keyHint")}
+                      </span>
+                    </div>
+                    <div className="set-field">
+                      <label className="set-field__label" htmlFor="set-claude-base">
+                        {t("settings.aiSection.claudeBaseUrl")}
+                      </label>
+                      <input
+                        id="set-claude-base"
+                        className="set-input"
+                        type="text"
+                        value={draft.claudeBaseUrl}
+                        onChange={(e) => update({ claudeBaseUrl: e.target.value })}
+                        placeholder="https://api.anthropic.com"
+                      />
+                      <span className="set-field__hint">{t("settings.aiSection.baseUrlHint")}</span>
+                    </div>
+                  </>
+                )}
+
+                {draft.provider === "openai" && (
+                  <>
+                    <div className="set-field">
+                      <label className="set-field__label" htmlFor="set-openai-key">
+                        {t("settings.aiSection.openaiKey")}
+                      </label>
+                      <div className="set-keyrow">
+                        <input
+                          id="set-openai-key"
+                          className="set-input"
+                          type={showOpenaiKey ? "text" : "password"}
+                          value={draft.openaiApiKey}
+                          onChange={(e) => update({ openaiApiKey: e.target.value })}
+                          placeholder={t("settings.aiSection.keyHint")}
+                        />
+                        <button
+                          type="button"
+                          className="set-keytoggle"
+                          onClick={() => setShowOpenaiKey((v) => !v)}
+                        >
+                          {showOpenaiKey ? t("settings.aiSection.hideKey") : t("settings.aiSection.showKey")}
+                        </button>
+                      </div>
+                      <span className="set-field__hint">
+                        {draft.openaiApiKey === "********"
+                          ? t("settings.aiSection.keyStored")
+                          : t("settings.aiSection.keyHint")}
+                      </span>
+                    </div>
+                    <div className="set-field">
+                      <label className="set-field__label" htmlFor="set-openai-base">
+                        {t("settings.aiSection.openaiBaseUrl")}
+                      </label>
+                      <input
+                        id="set-openai-base"
+                        className="set-input"
+                        type="text"
+                        value={draft.openaiBaseUrl}
+                        onChange={(e) => update({ openaiBaseUrl: e.target.value })}
+                        placeholder="https://api.openai.com"
+                      />
+                      <span className="set-field__hint">{t("settings.aiSection.baseUrlHint")}</span>
+                    </div>
+                  </>
+                )}
+
+                {draft.provider === "deepseek" && (
+                  <>
+                    <div className="set-field">
+                      <label className="set-field__label" htmlFor="set-deepseek-key">
+                        {t("settings.aiSection.deepseekKey")}
+                      </label>
+                      <div className="set-keyrow">
+                        <input
+                          id="set-deepseek-key"
+                          className="set-input"
+                          type={showDeepseekKey ? "text" : "password"}
+                          value={draft.deepseekApiKey}
+                          onChange={(e) => update({ deepseekApiKey: e.target.value })}
+                          placeholder={t("settings.aiSection.keyHint")}
+                        />
+                        <button
+                          type="button"
+                          className="set-keytoggle"
+                          onClick={() => setShowDeepseekKey((v) => !v)}
+                        >
+                          {showDeepseekKey ? t("settings.aiSection.hideKey") : t("settings.aiSection.showKey")}
+                        </button>
+                      </div>
+                      <span className="set-field__hint">
+                        {draft.deepseekApiKey === "********"
+                          ? t("settings.aiSection.keyStored")
+                          : t("settings.aiSection.keyHint")}
+                      </span>
+                    </div>
+                    <div className="set-field">
+                      <label className="set-field__label" htmlFor="set-deepseek-base">
+                        {t("settings.aiSection.deepseekBaseUrl")}
+                      </label>
+                      <input
+                        id="set-deepseek-base"
+                        className="set-input"
+                        type="text"
+                        value={draft.deepseekBaseUrl}
+                        onChange={(e) => update({ deepseekBaseUrl: e.target.value })}
+                        placeholder="https://api.deepseek.com"
+                      />
+                      <span className="set-field__hint">{t("settings.aiSection.baseUrlHint")}</span>
+                    </div>
+                  </>
+                )}
+
+                {draft.provider === "ollama" && (
+                  <div className="set-field">
+                    <label className="set-field__label" htmlFor="set-ollama-url">
+                      {t("settings.aiSection.ollamaUrl")}
+                    </label>
+                    <input
+                      id="set-ollama-url"
+                      className="set-input"
+                      type="text"
+                      value={draft.ollamaBaseUrl}
+                      onChange={(e) => update({ ollamaBaseUrl: e.target.value })}
+                      placeholder="http://localhost:11434"
+                    />
+                  </div>
+                )}
+              </section>
+
+              {/* ---- 扫描选项 ---- */}
+              <section className="set-section">
+                <h3 className="set-section__title">{t("settings.scanSection.title")}</h3>
+                <p className="set-field__hint">{t("settings.scanSection.sub")}</p>
+
+                <div className="set-toggle">
+                  <div className="set-toggle__text">
+                    <span className="set-field__label">{t("settings.scanSection.followSymlinks")}</span>
+                    <span className="set-field__hint">{t("settings.scanSection.followSymlinksHint")}</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    className="set-switch"
+                    aria-checked={draft.scanOptions.followSymlinks}
+                    onClick={() => updateScanOptions({ followSymlinks: !draft.scanOptions.followSymlinks })}
+                  />
+                </div>
+
+                <div className="set-toggle">
+                  <div className="set-toggle__text">
+                    <span className="set-field__label">{t("settings.scanSection.includeHidden")}</span>
+                    <span className="set-field__hint">{t("settings.scanSection.includeHiddenHint")}</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    className="set-switch"
+                    aria-checked={draft.scanOptions.includeHidden}
+                    onClick={() => updateScanOptions({ includeHidden: !draft.scanOptions.includeHidden })}
+                  />
+                </div>
+
+                <div className="set-field">
+                  <label className="set-field__label" htmlFor="set-max-depth">
+                    {t("settings.scanSection.maxDepth")}
+                  </label>
+                  <input
+                    id="set-max-depth"
+                    className="set-input"
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={draft.scanOptions.maxDepth ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      updateScanOptions({ maxDepth: v === "" ? null : Math.max(1, parseInt(v, 10) || 1) });
+                    }}
+                    placeholder={t("settings.scanSection.maxDepthUnlimited")}
+                  />
+                  <span className="set-field__hint">{t("settings.scanSection.maxDepthHint")}</span>
+                </div>
+
+                <div className="set-field">
+                  <label className="set-field__label" htmlFor="set-top-children">
+                    {t("settings.scanSection.topChildren")}
+                  </label>
+                  <input
+                    id="set-top-children"
+                    className="set-input"
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={draft.scanOptions.topChildren}
+                    onChange={(e) =>
+                      updateScanOptions({ topChildren: Math.max(1, parseInt(e.target.value, 10) || 20) })
+                    }
+                  />
+                  <span className="set-field__hint">{t("settings.scanSection.topChildrenHint")}</span>
+                </div>
+              </section>
+
+              {/* ---- 清理行为 ---- */}
+              <section className="set-section">
+                <h3 className="set-section__title">{t("settings.cleanupSection.title")}</h3>
+                <p className="set-field__hint">{t("settings.cleanupSection.sub")}</p>
+
+                <div className="set-toggle">
+                  <div className="set-toggle__text">
+                    <span className="set-field__label">{t("settings.cleanupSection.defaultToTrash")}</span>
+                    <span className="set-field__hint">{t("settings.cleanupSection.defaultToTrashHint")}</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    className="set-switch"
+                    aria-checked={draft.defaultToTrash}
+                    onClick={() => update({ defaultToTrash: !draft.defaultToTrash })}
+                  />
+                </div>
+              </section>
+
+              {/* ---- 外观 ---- */}
+              <section className="set-section">
+                <h3 className="set-section__title">{t("settings.appearanceSection.title")}</h3>
+                <p className="set-field__hint">{t("settings.appearanceSection.sub")}</p>
+
+                <div className="set-field">
+                  <label className="set-field__label">{t("settings.appearanceSection.language")}</label>
+                  <div className="set-row">
+                    <button
+                      type="button"
+                      className={`tc-settings__lang-btn${locale === "zh" ? " is-active" : ""}`}
+                      onClick={() => handleLanguageChange("zh")}
+                      aria-pressed={locale === "zh"}
+                    >
+                      {t("settings.appearanceSection.langZh")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`tc-settings__lang-btn${locale === "en" ? " is-active" : ""}`}
+                      onClick={() => handleLanguageChange("en")}
+                      aria-pressed={locale === "en"}
+                    >
+                      {t("settings.appearanceSection.langEn")}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="set-toggle">
+                  <div className="set-toggle__text">
+                    <span className="set-field__label">{t("settings.appearanceSection.theme")}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="tc-settings__lang-btn"
+                    onClick={onToggleTheme}
+                  >
+                    {theme === "dark"
+                      ? t("settings.appearanceSection.themeDark")
+                      : t("settings.appearanceSection.themeLight")}
+                  </button>
+                </div>
+              </section>
+
+              {/* ---- 权限状态 ---- */}
+              <section className="set-section">
+                <h3 className="set-section__title">{t("settings.permissionSection.title")}</h3>
+                <p className="set-field__hint">{t("settings.permissionSection.sub")}</p>
+
+                {status && (
+                  <>
+                    <div className="set-toggle">
+                      <span className="set-field__label">{t("settings.permissionSection.fullDiskAccess")}</span>
+                      <span className={`set-status ${status.fullDiskAccess ? "set-status--ok" : "set-status--err"}`}>
+                        {status.fullDiskAccess
+                          ? t("settings.permissionSection.granted")
+                          : t("settings.permissionSection.notGranted")}
+                      </span>
+                    </div>
+
+                    <div className="set-toggle">
+                      <span className="set-field__label">{t("settings.permissionSection.admin")}</span>
+                      <span className={`set-status ${status.isAdmin ? "set-status--ok" : "set-status--err"}`}>
+                        {status.isAdmin
+                          ? t("settings.permissionSection.granted")
+                          : t("settings.permissionSection.notGranted")}
+                      </span>
+                    </div>
+
+                    {status.platform === "macos" && helper && (
+                      <div className="set-toggle">
+                        <span className="set-field__label">{t("settings.permissionSection.helper")}</span>
+                        <span className={`set-status ${helper.installed ? "set-status--ok" : "set-status--err"}`}>
+                          {helper.installed
+                            ? t("settings.permissionSection.installed")
+                            : t("settings.permissionSection.notInstalled")}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="set-actions">
+                      {!status.fullDiskAccess && (
+                        <button
+                          type="button"
+                          className="tc-btn tc-btn--primary"
+                          onClick={() => void openPermSettings("full_disk_access")}
+                        >
+                          {t("settings.permissionSection.openSettings")}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="tc-btn tc-btn--ghost"
+                        onClick={() => void refresh()}
+                      >
+                        {t("settings.permissionSection.recheck")}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </section>
+            </div>
+          </div>
+        )}
+
+        <div className="tc-settings__foot">
+          <span className="set-status">
+            {saveStatus === "saved" && (
+              <span className="set-status--ok">{t("settings.saved")}</span>
+            )}
+          </span>
+          <div className="set-actions">
+            <button
+              type="button"
+              className="tc-btn tc-btn--primary"
+              onClick={() => void handleSave()}
+              disabled={saving || saveStatus === "saving"}
+            >
+              {saveStatus === "saving" ? t("settings.saving") : t("settings.save")}
+            </button>
+          </div>
         </div>
       </div>
-
-      <div className="set-actions">
-        <Button
-          variant="primary"
-          onClick={() => void onSave()}
-          disabled={saving}
-        >
-          {saving ? t("cleanup.settings.saving") : t("cleanup.settings.save")}
-        </Button>
-        {saved && !error && (
-          <span className="set-status set-status--ok">
-            {t("cleanup.settings.saved")}
-          </span>
-        )}
-        {error && <span className="set-status set-status--err">{error}</span>}
-      </div>
-    </section>
+    </div>
   );
 }
+
+export default SettingsPanel;

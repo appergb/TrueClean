@@ -99,6 +99,49 @@ pub fn tool_specs() -> Vec<Value> {
             "description": "【危险操作】清空系统回收站，永久删除其中内容。执行前必须已获得用户明确确认。返回清理报告。",
             "input_schema": { "type": "object", "properties": {}, "required": [] }
         }),
+        json!({
+            "name": "read_file",
+            "description": "读取指定文件的文本内容（如 README.md、package.json、配置文件等）。用于理解项目性质或确认文件用途。受工作目录约束：path 必须在工作目录内。最多返回前 8000 字符。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "要读取的文件绝对路径（必须在工作目录内）" },
+                    "maxChars": { "type": "integer", "description": "最多返回的字符数，默认 8000", "minimum": 100, "maximum": 50000 }
+                },
+                "required": ["path"]
+            }
+        }),
+        json!({
+            "name": "web_search",
+            "description": "在网络搜索资料，用于查清不确定的文件/目录/进程/配置项用途。例如：不确定某 .dll 是什么、不确定 node_modules 是否可删、不确定某配置文件作用时，先搜索再决定。返回搜索结果摘要列表。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "description": "搜索关键词（建议用英文以获得更广覆盖）" },
+                    "maxResults": { "type": "integer", "description": "最多返回结果数，默认 5", "minimum": 1, "maximum": 10 }
+                },
+                "required": ["query"]
+            }
+        }),
+        json!({
+            "name": "select_paths",
+            "description": "圈选（高亮标记）指定路径列表，在前端 UI 上为用户可视化展示 Agent 推荐清理的文件/目录。这不是删除操作，只是标记。用户可以在 UI 上确认或取消这些圈选，再决定是否清理。用于在调用 clean_paths 之前先让用户看到将要清理什么。注意：不能圈选用户当前所在的工作目录本身。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "paths": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "要圈选的绝对路径列表（必须在工作目录内）"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "圈选理由，向用户解释为什么推荐清理这些路径"
+                    }
+                },
+                "required": ["paths", "reason"]
+            }
+        }),
     ]
 }
 
@@ -117,6 +160,8 @@ pub fn dispatch(name: &str, args: &Value, state: &AppState) -> AppResult<Value> 
         "analyze_disk_health" => analyze_disk_health(),
         "clean_paths" => clean_paths(args, state),
         "empty_trash" => empty_trash(),
+        "read_file" => read_file(args),
+        "web_search" => web_search(args),
         other => Err(AppError::Agent(format!("未知工具: {other}"))),
     }
 }
@@ -694,6 +739,236 @@ fn empty_trash() -> AppResult<Value> {
         "failedTotal": failed_total,
         "note": "回收站已清空，此操作不可撤销",
     }))
+}
+
+/// 读取文件文本内容（如 README.md、package.json、配置文件）。
+/// 受工作目录约束：path 必须在工作目录内（由调用方 runner 注入 workdir 校验）。
+/// 最多返回前 maxChars 字符（默认 8000），避免超大文件撑爆上下文。
+fn read_file(args: &Value) -> AppResult<Value> {
+    let path = require_path(args)?;
+    let max_chars = args
+        .get("maxChars")
+        .and_then(Value::as_u64)
+        .unwrap_or(8000)
+        .clamp(100, 50000) as usize;
+
+    // 安全检查：拒绝读取系统保护路径（如 /etc/passwd、/System/...）。
+    if crate::cleaning::safety::is_protected(&path) {
+        return Err(AppError::Agent(format!(
+            "拒绝读取系统保护路径: {}",
+            path.display()
+        )));
+    }
+
+    let metadata = std::fs::metadata(&path).map_err(|e| {
+        AppError::Agent(format!("无法读取文件 {}: {}", path.display(), e))
+    })?;
+
+    if !metadata.is_file() {
+        return Err(AppError::Agent(format!(
+            "路径不是普通文件: {}",
+            path.display()
+        )));
+    }
+
+    // 拒绝读取超大文件（> 1MB 的文本文件通常是日志，不该塞给 LLM）。
+    const MAX_FILE_BYTES: u64 = 1_000_000;
+    if metadata.len() > MAX_FILE_BYTES {
+        return Ok(json!({
+            "path": path.to_string_lossy(),
+            "sizeBytes": metadata.len(),
+            "truncated": true,
+            "content": format!("[文件过大（{} 字节），已跳过读取。请用更具体的路径或 grep 工具。]", metadata.len()),
+            "note": "文件超过 1MB 上限，未读取内容",
+        }));
+    }
+
+    let content = std::fs::read_to_string(&path).map_err(|e| {
+        AppError::Agent(format!("读取文件失败 {}: {}", path.display(), e))
+    })?;
+
+    let total_chars = content.chars().count();
+    let (truncated, returned_content) = if total_chars > max_chars {
+        // 按字符边界安全截取，避免在多字节字符中间切片。
+        let truncated_content: String = content.chars().take(max_chars).collect();
+        (true, truncated_content)
+    } else {
+        (false, content)
+    };
+
+    Ok(json!({
+        "path": path.to_string_lossy(),
+        "sizeBytes": metadata.len(),
+        "totalChars": total_chars,
+        "returnedChars": returned_content.chars().count(),
+        "truncated": truncated,
+        "content": returned_content,
+    }))
+}
+
+/// 网络搜索：使用 DuckDuckGo HTML 接口（无需 API key）查询关键词。
+/// 返回结果摘要列表（标题 + URL + 摘要片段）。
+/// 用于查清不确定的文件/目录/进程/配置项用途。
+fn web_search(args: &Value) -> AppResult<Value> {
+    let query = args
+        .get("query")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| AppError::Agent("缺少必填参数 query".into()))?;
+    let max_results = args
+        .get("maxResults")
+        .and_then(Value::as_u64)
+        .unwrap_or(5)
+        .clamp(1, 10) as usize;
+
+    // 使用 DuckDuckGo HTML 接口（无需 API key，适合 agent 查询）。
+    let url = format!(
+        "https://html.duckduckgo.com/html/?q={}",
+        urlencoding::encode(query)
+    );
+
+    // 同步阻塞请求（在 tokio runtime 内通过 block_in_place 避免死锁）。
+    let body = tokio::task::block_in_place(|| {
+        let rt = tokio::runtime::Handle::current();
+        rt.block_on(async {
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(15))
+                .user_agent("TrueClean-Agent/1.0")
+                .build()
+                .map_err(|e| AppError::Agent(format!("构建 HTTP 客户端失败: {}", e)))?
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| AppError::Agent(format!("搜索请求失败: {}", e)))?
+                .text()
+                .await
+                .map_err(|e| AppError::Agent(format!("读取搜索响应失败: {}", e)))
+        })
+    })?;
+
+    // 简易 HTML 解析：提取结果标题与摘要。
+    // DuckDuckGo HTML 结果格式：<a class="result__a" href="...">标题</a>
+    // <a class="result__snippet">摘要</a>
+    let results = parse_ddg_results(&body, max_results);
+
+    Ok(json!({
+        "query": query,
+        "resultCount": results.len(),
+        "results": results,
+        "note": if results.is_empty() {
+            "未找到相关结果，建议换用更具体或英文关键词重试"
+        } else {
+            ""
+        },
+    }))
+}
+
+/// 解析 DuckDuckGo HTML 搜索结果，提取标题、URL、摘要。
+fn parse_ddg_results(html: &str, max: usize) -> Vec<Value> {
+    let mut results = Vec::new();
+    // 简易正则式提取 result__a 链接与 result__snippet 摘要。
+    // DuckDuckGo HTML 版结构稳定，这里用字符串匹配避免引入 regex 依赖。
+    let mut pos = 0;
+    while pos < html.len() && results.len() < max {
+        // 查找下一个结果链接
+        let link_marker = "class=\"result__a\"";
+        let snippet_marker = "class=\"result__snippet\"";
+        let link_start = match html[pos..].find(link_marker) {
+            Some(idx) => pos + idx,
+            None => break,
+        };
+        // 提取 href
+        let href_start = match html[link_start..].find("href=\"") {
+            Some(idx) => link_start + idx + 6,
+            None => {
+                pos = link_start + 1;
+                continue;
+            }
+        };
+        let href_end = match html[href_start..].find('"') {
+            Some(idx) => href_start + idx,
+            None => break,
+        };
+        let raw_href = &html[href_start..href_end];
+        // DuckDuckGo 链接是 //duckduckgo.com/l/?uddg=<encoded>，解码得到真实 URL
+        let url = extract_ddg_url(raw_href);
+
+        // 提取链接文本（标题）
+        let text_start = match html[href_end..].find('>') {
+            Some(idx) => href_end + idx + 1,
+            None => {
+                pos = href_end;
+                continue;
+            }
+        };
+        let text_end = match html[text_start..].find("</a>") {
+            Some(idx) => text_start + idx,
+            None => {
+                pos = text_start;
+                continue;
+            }
+        };
+        let title = strip_html_tags(&html[text_start..text_end]).trim().to_string();
+
+        // 提取摘要
+        let snippet = html[text_end..]
+            .find(snippet_marker)
+            .and_then(|idx| {
+                let s_start = text_end + idx + snippet_marker.len();
+                html[s_start..].find('>').and_then(|gt| {
+                    let content_start = s_start + gt + 1;
+                    html[content_start..]
+                        .find("</a>")
+                        .map(|et| strip_html_tags(&html[content_start..content_start + et]).trim().to_string())
+                })
+            })
+            .unwrap_or_default();
+
+        if !title.is_empty() {
+            results.push(json!({
+                "title": title,
+                "url": url,
+                "snippet": snippet,
+            }));
+        }
+        pos = text_end + 1;
+    }
+    results
+}
+
+/// 从 DuckDuckGo 重定向链接中提取真实 URL。
+fn extract_ddg_url(raw: &str) -> String {
+    // 格式：//duckduckgo.com/l/?uddg=<encoded_url>&rut=...
+    if let Some(idx) = raw.find("uddg=") {
+        let after = &raw[idx + 5..];
+        let end = after.find('&').unwrap_or(after.len());
+        if let Ok(decoded) = urlencoding::decode(&after[..end]) {
+            return decoded.into_owned();
+        }
+    }
+    raw.to_string()
+}
+
+/// 移除 HTML 标签，返回纯文本。
+fn strip_html_tags(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut in_tag = false;
+    for ch in s.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => result.push(ch),
+            _ => {}
+        }
+    }
+    // 解码常见 HTML 实体
+    result
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&nbsp;", " ")
 }
 
 // ---------------------------------------------------------------------------

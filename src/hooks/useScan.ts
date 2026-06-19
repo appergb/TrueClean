@@ -12,7 +12,10 @@ export function useScan() {
   const result = useScanStore((s) => s.result);
   const status = useScanStore((s) => s.status);
   const progress = useScanStore((s) => s.progress);
-  const target = useScanStore((s) => s.target);
+  // P0-7：target 已拆分为 scanTarget（不可变扫描根）+ drillPath（可变下钻路径）。
+  const scanTarget = useScanStore((s) => s.scanTarget);
+  const drillPath = useScanStore((s) => s.drillPath);
+  const setDrillPath = useScanStore((s) => s.setDrillPath);
   const error = useScanStore((s) => s.error);
 
   const loadVolumes = useScanStore((s) => s.loadVolumes);
@@ -34,7 +37,9 @@ export function useScan() {
     result,
     status,
     progress,
-    target,
+    scanTarget,
+    drillPath,
+    setDrillPath,
     error,
     loadVolumes,
     scan,

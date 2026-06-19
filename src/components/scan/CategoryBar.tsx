@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 import { useI18n } from "../../i18n";
 import {
@@ -51,7 +51,8 @@ export function useCategoryLabel() {
 export default function CategoryBar() {
   const { t } = useI18n();
   const result = useScanStore((s) => s.result);
-  const target = useScanStore((s) => s.target);
+  const drillPath = useScanStore((s) => s.drillPath);
+  const setDrillPath = useScanStore((s) => s.setDrillPath);
   const volumes = useScanStore((s) => s.volumes);
 
   const removed = useCleanStore((s) => s.removed);
@@ -62,13 +63,28 @@ export default function CategoryBar() {
 
   const root = result?.tree ?? null;
 
+  // 判断目录路径是否有子项被勾选（部分选中状态）。
+  // 通过前缀匹配：如果 checked 中存在以 `path + "/"` 开头的键，则该目录有子项被勾选。
+  const hasCheckedDescendant = useCallback(
+    (path: string): boolean => {
+      const prefix = path.endsWith("/") ? path : path + "/";
+      for (const key of Object.keys(checked)) {
+        if (key !== path && key.startsWith(prefix) && checked[key]) {
+          return true;
+        }
+      }
+      return false;
+    },
+    [checked],
+  );
+
   const current = useMemo(() => {
     if (!root) return null;
-    if (!target || target === root.path) return root;
-    // Walk to the target if it's a descendant; otherwise show root.
-    const found = findByPathLocal(root, target);
+    if (!drillPath || drillPath === root.path) return root;
+    // 走到下钻目标（若是后代）；否则显示根。
+    const found = findByPathLocal(root, drillPath);
     return found ?? root;
-  }, [root, target]);
+  }, [root, drillPath]);
 
   const rows = useMemo(() => {
     if (!current) return [];
@@ -151,29 +167,43 @@ export default function CategoryBar() {
           const meta = CAT_META[node.category];
           const isChecked = !!checked[node.path];
           const isRemoved = !!removed[node.path];
+          // 部分选中：该目录本身未被勾选，但其子项有被勾选。
+          const isPartial = !isChecked && node.isDir && hasCheckedDescendant(node.path);
           const drillable = node.isDir && effChildren(node, removed).length > 0;
           return (
             <div
               key={node.path}
-              className={`tc-left__row${isChecked ? " is-selected" : ""}${isRemoved ? " is-removed" : ""}`}
+              className={`tc-left__row${isChecked ? " is-selected" : ""}${isPartial ? " is-partial-checked" : ""}${isRemoved ? " is-removed" : ""}`}
               title={t("lens.left.drillTitle")}
               onClick={() => toggleCheck(node)}
-              onDoubleClick={() => {
-                if (drillable) {
-                  useScanStore.setState({ target: node.path });
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleCheck(node);
                 }
               }}
-              role="button"
-              tabIndex={0}
+              onDoubleClick={() => {
+                if (drillable) {
+                  setDrillPath(node.path);
+                }
+              }}
             >
               <span
-                className={`tc-left__checkbox${isChecked ? " is-checked" : ""}`}
+                className={`tc-left__checkbox${isChecked ? " is-checked" : ""}${isPartial ? " is-partial" : ""}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleCheck(node);
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleCheck(node);
+                  }
+                }}
                 role="checkbox"
                 aria-checked={isChecked}
+                tabIndex={0}
               >
                 {isChecked && (
                   <svg
@@ -187,6 +217,9 @@ export default function CategoryBar() {
                   >
                     <path d="M5 12l5 5L19 7" />
                   </svg>
+                )}
+                {isPartial && !isChecked && (
+                  <span className="tc-left__checkbox-dot" aria-hidden="true" />
                 )}
               </span>
 
@@ -214,7 +247,7 @@ export default function CategoryBar() {
                   title={t("lens.left.drill")}
                   onClick={(e) => {
                     e.stopPropagation();
-                    useScanStore.setState({ target: node.path });
+                    setDrillPath(node.path);
                   }}
                   aria-label={t("lens.left.drill")}
                 >
@@ -243,7 +276,7 @@ export default function CategoryBar() {
   );
 }
 
-/** Find a node by path anywhere in the tree (local helper). */
+/** 在树中按路径查找节点（本地辅助函数）。 */
 function findByPathLocal(root: DirNode, path: string): DirNode | null {
   if (root.path === path) return root;
   for (const child of root.children) {

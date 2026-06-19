@@ -96,8 +96,8 @@ export function CrashTest() {
     <button
       type="button"
       className="tc-crashtest"
-      aria-label="崩溃测试（开发）"
-      title="崩溃测试（开发）"
+      aria-label={t("shell.errorBoundary.crashTest")}
+      title={t("shell.errorBoundary.crashTest")}
       onClick={() => {
         throw new Error("CrashTest: intentional throw to verify ErrorBoundary");
       }}

@@ -70,30 +70,46 @@ interface TipData {
 export default function BubbleMap() {
   const { t } = useI18n();
   const result = useScanStore((s) => s.result);
-  const target = useScanStore((s) => s.target);
+  const drillPath = useScanStore((s) => s.drillPath);
+  const setDrillPath = useScanStore((s) => s.setDrillPath);
   const removed = useCleanStore((s) => s.removed);
   const isChecked = useCleanStore((s) => s.isChecked);
   const toggleCheck = useCleanStore((s) => s.toggleCheck);
+  // 订阅整个 checked map，用于判断目录是否有子项被勾选（部分选中）。
+  const checkedMap = useCleanStore((s) => s.checked);
 
   const root = result?.tree ?? null;
 
-  // `drillPath` mirrors `scanStore.target` so the left column and center
-  // column stay in sync. Local `selectedPath` / `hoverPath` are UI-only.
-  const drillPath = target;
+  // 判断目录路径是否有子项被勾选（部分选中状态）。
+  // 通过前缀匹配：如果 checkedMap 中存在以 `path + "/"` 开头的键，则该目录有子项被勾选。
+  const hasCheckedDescendant = useCallback(
+    (path: string): boolean => {
+      const prefix = path.endsWith("/") ? path : path + "/";
+      for (const key of Object.keys(checkedMap)) {
+        if (key !== path && key.startsWith(prefix) && checkedMap[key]) {
+          return true;
+        }
+      }
+      return false;
+    },
+    [checkedMap],
+  );
+
+  // `drillPath` 来自 scanStore，与左列保持同步。本地 `selectedPath` /
+  // `hoverPath` 仅用于 UI 高亮。
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [hoverPath, setHoverPath] = useState<string | null>(null);
   const [dims, setDims] = useState({ w: 0, h: 0 });
 
   const frameRef = useRef<HTMLDivElement>(null);
 
-  // Clear selection when the drill target changes.
+  // 下钻路径变化时清空选中态。
   useEffect(() => {
     setSelectedPath(null);
     setHoverPath(null);
   }, [drillPath]);
 
-  // Track the viz frame dimensions via ResizeObserver so d3.pack can lay out
-  // against the real pixel size.
+  // 通过 ResizeObserver 跟踪可视化区域尺寸，让 d3.pack 按真实像素布局。
   useEffect(() => {
     const el = frameRef.current;
     if (!el) return;
@@ -183,7 +199,7 @@ export default function BubbleMap() {
     return {
       name: n.name,
       color: meta.color,
-      catLabel: meta.label,
+      catLabel: t(`scan.category.${meta.categoryKey}`),
       sizeLabel: fmtBytes(effSize(n, removed)),
       countLabel: fmtNum(effCount(n, removed)),
       hint: n.isDir
@@ -200,9 +216,9 @@ export default function BubbleMap() {
       if (!node.isDir) return;
       const kids = effChildren(node, removed);
       if (kids.length === 0) return;
-      useScanStore.setState({ target: node.path });
+      setDrillPath(node.path);
     },
-    [removed],
+    [removed, setDrillPath],
   );
 
   const selectChild = useCallback((node: DirNode) => {
@@ -222,7 +238,7 @@ export default function BubbleMap() {
                 type="button"
                 className={`tc-center__crumb${isLast ? " is-current" : ""}`}
                 onClick={() => {
-                  useScanStore.setState({ target: c.path });
+                  setDrillPath(c.path);
                 }}
                 disabled={isLast}
               >
@@ -287,24 +303,36 @@ export default function BubbleMap() {
               const selected = selectedPath === n.path;
               const hovered = hoverPath === n.path;
               const checked = isChecked(n.path);
+              // 部分选中：该目录本身未被勾选，但其子项有被勾选。
+              const partialChecked = !checked && hasCheckedDescendant(n.path);
               const showLabel = b.r > 26;
               const fontPx = b.r > 54 ? 14 : b.r > 40 ? 13 : 11;
+              // 边框：选中 > 勾选(深绿) > 部分勾选(浅绿虚线) > 悬停 > 默认
               const border = selected
                 ? `2px solid ${color}`
-                : hovered
-                  ? `1.5px solid ${rgba(color, 0.85)}`
-                  : `1px solid ${rgba(color, 0.45)}`;
+                : checked
+                  ? `2px solid var(--good)`
+                  : partialChecked
+                    ? `2px dashed var(--good-soft, color-mix(in oklch, var(--good) 50%, transparent))`
+                    : hovered
+                      ? `1.5px solid ${rgba(color, 0.85)}`
+                      : `1px solid ${rgba(color, 0.45)}`;
+              // 阴影：选中 > 勾选(深绿光晕) > 部分勾选(浅绿光晕) > 悬停 > 默认
               const glow = selected
                 ? `0 0 0 1px ${color}, 0 0 26px ${rgba(color, 0.45)}`
-                : hovered
-                  ? `0 0 18px ${rgba(color, 0.3)}`
-                  : `inset 0 6px 18px rgba(0,0,0,0.35)`;
+                : checked
+                  ? `0 0 0 1px var(--good), 0 0 20px color-mix(in oklch, var(--good) 40%, transparent)`
+                  : partialChecked
+                    ? `0 0 16px color-mix(in oklch, var(--good) 25%, transparent)`
+                    : hovered
+                      ? `0 0 18px ${rgba(color, 0.3)}`
+                      : `inset 0 6px 18px rgba(0,0,0,0.35)`;
               const bg = `radial-gradient(circle at 36% 30%, ${rgba(color, selected ? 0.42 : 0.3)}, ${rgba(color, 0.08)} 72%)`;
 
               return (
                 <div
                   key={n.path}
-                  className={`tc-bubble${selected ? " is-selected" : ""}${hovered ? " is-hovered" : ""}${checked ? " is-checked" : ""}`}
+                  className={`tc-bubble${selected ? " is-selected" : ""}${hovered ? " is-hovered" : ""}${checked ? " is-checked" : ""}${partialChecked ? " is-partial-checked" : ""}`}
                   style={{
                     left: b.x - b.r,
                     top: b.y - b.r,
@@ -316,12 +344,18 @@ export default function BubbleMap() {
                     zIndex: selected ? 5 : hovered ? 4 : 1,
                   }}
                   onClick={() => selectChild(n)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      selectChild(n);
+                    }
+                  }}
                   onDoubleClick={() => drillTo(n)}
                   onMouseEnter={() => setHoverPath(n.path)}
                   onMouseLeave={() => setHoverPath(null)}
                   role="button"
                   tabIndex={0}
-                  aria-label={`${n.name} ${fmtBytes(effSize(n, removed))}`}
+                  aria-label={`${n.name} ${fmtBytes(effSize(n, removed))}${checked ? " (已勾选)" : partialChecked ? " (含已勾选子项)" : ""}`}
                 >
                   {showLabel && (
                     <div className="tc-bubble__label" style={{ maxWidth: b.r * 1.7 }}>
@@ -342,15 +376,16 @@ export default function BubbleMap() {
                       </div>
                     </div>
                   )}
-                  {/* Check toggle — small badge in the top-left of the bubble. */}
+                  {/* 勾选切换 —— 气泡左上角的小徽章。
+                      深绿 = 已勾选；浅绿半填充 = 部分子项已勾选。 */}
                   <button
                     type="button"
-                    className={`tc-bubble__check${checked ? " is-checked" : ""}`}
+                    className={`tc-bubble__check${checked ? " is-checked" : ""}${partialChecked ? " is-partial" : ""}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleCheck(n);
                     }}
-                    aria-label={checked ? "取消勾选" : "勾选"}
+                    aria-label={checked ? t("lens.center.uncheck") : t("lens.center.check")}
                     style={{ borderColor: rgba(color, 0.6) }}
                   >
                     {checked && (
@@ -365,6 +400,9 @@ export default function BubbleMap() {
                       >
                         <path d="M5 12l5 5L19 7" />
                       </svg>
+                    )}
+                    {partialChecked && !checked && (
+                      <span className="tc-bubble__check-partial-dot" aria-hidden="true" />
                     )}
                   </button>
                 </div>
@@ -429,7 +467,9 @@ export default function BubbleMap() {
                 className="tc-center__legend-swatch"
                 style={{ background: meta.color }}
               />
-              <span className="tc-center__legend-label">{meta.label}</span>
+              <span className="tc-center__legend-label">
+                {t(`scan.category.${meta.categoryKey}`)}
+              </span>
             </div>
           );
         })}

@@ -12,6 +12,56 @@ use tauri::{AppHandle, Emitter, State};
 /// Event channel for streaming scan progress to the frontend.
 const PROGRESS_EVENT: &str = "scan://progress";
 
+/// P0-8: 判断一个挂载点是否为用户可见的真实数据卷。
+///
+/// 过滤掉以下非用户卷：
+/// - 总大小为 0 的虚拟文件系统（procfs、sysfs、devtmpfs、cgroup 等）；
+/// - macOS APFS 辅助卷（Preboot / Recovery / VM / Update / Hardware），它们
+///   挂载在 `/System/Volumes/<Name>` 下，是同一 APFS 容器的只读/辅助角色，
+///   重复展示会让用户误以为有多个磁盘；
+/// - Linux 上的常见虚拟挂载点（/proc、/sys、/dev、/run、/dev/shm）。
+fn is_user_volume(mount_point: &std::path::Path, total_bytes: u64) -> bool {
+    // 1. 虚拟文件系统通常报告 total_space == 0。
+    if total_bytes == 0 {
+        return false;
+    }
+
+    let mp_str = mount_point.to_string_lossy();
+
+    // 2. macOS APFS 辅助卷：/System/Volumes/{Preboot,Recovery,VM,Update,Hardware}
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(rest) = mp_str.strip_prefix("/System/Volumes/") {
+            let helper_names = ["Preboot", "Recovery", "VM", "Update", "Hardware"];
+            let top = rest.split('/').next().unwrap_or("");
+            if helper_names.contains(&top) {
+                return false;
+            }
+        }
+    }
+
+    // 3. Linux 虚拟挂载点。
+    #[cfg(target_os = "linux")]
+    {
+        const VIRTUAL_PREFIXES: &[&str] = &[
+            "/proc",
+            "/sys",
+            "/dev",
+            "/run",
+            "/dev/shm",
+            "/sys/fs/cgroup",
+        ];
+        if VIRTUAL_PREFIXES
+            .iter()
+            .any(|p| mp_str == *p || mp_str.starts_with(&format!("{p}/")))
+        {
+            return false;
+        }
+    }
+
+    true
+}
+
 /// List mounted volumes with usage stats via sysinfo.
 #[tauri::command]
 pub fn get_volumes() -> AppResult<Vec<VolumeInfo>> {
@@ -20,18 +70,23 @@ pub fn get_volumes() -> AppResult<Vec<VolumeInfo>> {
     let disks = Disks::new_with_refreshed_list();
     let volumes = disks
         .iter()
-        .map(|d| {
+        .filter_map(|d| {
             let total = d.total_space();
+            let mount_point = d.mount_point();
+            // P0-8: 过滤非用户卷（虚拟 FS、APFS 辅助卷等）。
+            if !is_user_volume(mount_point, total) {
+                return None;
+            }
             let available = d.available_space();
-            VolumeInfo {
+            Some(VolumeInfo {
                 name: d.name().to_string_lossy().into_owned(),
-                mount_point: d.mount_point().to_string_lossy().into_owned(),
+                mount_point: mount_point.to_string_lossy().into_owned(),
                 total_bytes: total,
                 available_bytes: available,
                 used_bytes: total.saturating_sub(available),
                 file_system: d.file_system().to_string_lossy().into_owned(),
                 is_removable: d.is_removable(),
-            }
+            })
         })
         .collect();
 
@@ -109,4 +164,86 @@ pub async fn scan_path(
 pub fn cancel_scan(scan_id: String, state: State<AppState>) -> AppResult<()> {
     state.cancel(&scan_id);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    /// P0-8: total_bytes == 0 的虚拟文件系统应被过滤。
+    #[test]
+    fn is_user_volume_rejects_zero_total_bytes() {
+        assert!(!is_user_volume(Path::new("/proc"), 0));
+        assert!(!is_user_volume(Path::new("/sys"), 0));
+        assert!(!is_user_volume(Path::new("/dev"), 0));
+    }
+
+    /// P0-8: 真实数据卷应通过过滤。
+    #[test]
+    fn is_user_volume_accepts_real_data_volume() {
+        assert!(is_user_volume(Path::new("/"), 500_000_000_000));
+        assert!(is_user_volume(
+            Path::new("/Volumes/External"),
+            1_000_000_000_000
+        ));
+    }
+
+    /// P0-8: macOS APFS 辅助卷应被过滤。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn is_user_volume_rejects_macos_apfs_helper_volumes() {
+        assert!(!is_user_volume(
+            Path::new("/System/Volumes/Preboot"),
+            500_000_000
+        ));
+        assert!(!is_user_volume(
+            Path::new("/System/Volumes/Recovery"),
+            500_000_000
+        ));
+        assert!(!is_user_volume(
+            Path::new("/System/Volumes/VM"),
+            500_000_000
+        ));
+        assert!(!is_user_volume(
+            Path::new("/System/Volumes/Update"),
+            500_000_000
+        ));
+        assert!(!is_user_volume(
+            Path::new("/System/Volumes/Hardware"),
+            500_000_000
+        ));
+        // 但 Data 卷（用户实际数据）应保留。
+        assert!(is_user_volume(
+            Path::new("/System/Volumes/Data"),
+            500_000_000_000
+        ));
+    }
+
+    /// P0-8: Linux 虚拟挂载点应被过滤（即使 total_bytes 非 0，比如某些 tmpfs）。
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn is_user_volume_rejects_linux_virtual_mounts() {
+        assert!(!is_user_volume(Path::new("/proc"), 100));
+        assert!(!is_user_volume(Path::new("/proc/self"), 100));
+        assert!(!is_user_volume(Path::new("/sys"), 100));
+        assert!(!is_user_volume(Path::new("/sys/kernel"), 100));
+        assert!(!is_user_volume(Path::new("/dev"), 100));
+        assert!(!is_user_volume(Path::new("/dev/shm"), 100));
+        assert!(!is_user_volume(Path::new("/run"), 100));
+        assert!(!is_user_volume(Path::new("/run/user"), 100));
+    }
+
+    /// P0-8: get_volumes 不应 panic，且不应返回 total_bytes == 0 的卷。
+    #[test]
+    fn get_volumes_returns_only_user_volumes() {
+        let vols = get_volumes().unwrap();
+        for v in &vols {
+            assert!(
+                v.total_bytes > 0,
+                "virtual filesystem leaked into get_volumes: {}",
+                v.mount_point
+            );
+        }
+    }
 }

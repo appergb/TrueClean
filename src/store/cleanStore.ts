@@ -3,15 +3,19 @@
 
 import { create } from "zustand";
 
+import { t } from "../i18n";
 import { cleanPaths } from "../lib/ipc";
 import { fmtBytes } from "../lib/lens-utils";
 import type { DirNode } from "../lib/types";
+
+type ToastType = "success" | "warn" | "error";
 
 interface CleanState {
   checked: Record<string, boolean>;
   removed: Record<string, boolean>;
   showConfirm: boolean;
-  toast: { show: boolean; msg: string };
+  cleaning: boolean;
+  toast: { show: boolean; msg: string; type: ToastType };
 
   toggleCheck: (node: DirNode) => void;
   checkMany: (nodes: DirNode[]) => void;
@@ -27,11 +31,22 @@ interface CleanState {
   reset: () => void;
 }
 
+/** Extract a human-readable message from an unknown error. Tauri rejects
+ *  with `{ message: string }` objects, which `String(e)` would render as
+ *  "[object Object]". */
+function errMsg(e: unknown): string {
+  if (e && typeof e === "object" && "message" in e) {
+    return String((e as { message: unknown }).message);
+  }
+  return String(e);
+}
+
 export const useCleanStore = create<CleanState>((set, get) => ({
   checked: {},
   removed: {},
   showConfirm: false,
-  toast: { show: false, msg: "" },
+  cleaning: false,
+  toast: { show: false, msg: "", type: "success" },
 
   toggleCheck: (node) =>
     set((s) => {
@@ -65,35 +80,62 @@ export const useCleanStore = create<CleanState>((set, get) => ({
   closeConfirm: () => set({ showConfirm: false }),
 
   doClean: async (toTrash) => {
-    const paths = Object.keys(get().checked);
-    if (paths.length === 0) return { freed: 0, count: 0 };
+    const { checked, removed } = get();
+    const paths = Object.keys(checked).filter((p) => checked[p]);
+    if (paths.length === 0) {
+      set({ showConfirm: false });
+      return { freed: 0, count: 0 };
+    }
+    set({ showConfirm: false, cleaning: true });
     try {
       const report = await cleanPaths(paths, toTrash);
-      const removed: Record<string, boolean> = { ...get().removed };
-      for (const p of paths) removed[p] = true;
+      const newRemoved: Record<string, boolean> = { ...removed };
+      // 只标记成功移除的路径，失败的不标记。
+      const failedSet = new Set(report.failed);
+      for (const p of paths) {
+        if (!failedSet.has(p)) {
+          newRemoved[p] = true;
+        }
+      }
+      const hasFailures = report.failed.length > 0;
       set({
-        removed,
         checked: {},
-        showConfirm: false,
+        removed: newRemoved,
+        cleaning: false,
         toast: {
           show: true,
-          msg: `已移至废纸篓，释放 ${fmtBytes(report.freedBytes)}`,
+          msg: hasFailures
+            ? t("lens.toast.partialFail", {
+                removed: report.removedCount,
+                size: fmtBytes(report.freedBytes),
+                failed: report.failed.length,
+              })
+            : t("lens.toast.moved", { size: fmtBytes(report.freedBytes) }),
+          type: hasFailures ? "warn" : "success",
         },
       });
       return { freed: report.freedBytes, count: report.removedCount };
-    } catch {
-      set({ showConfirm: false });
+    } catch (e) {
+      set({
+        cleaning: false,
+        toast: {
+          show: true,
+          msg: t("lens.toast.failed", { error: errMsg(e) }),
+          type: "error",
+        },
+      });
       return { freed: 0, count: 0 };
     }
   },
 
-  clearToast: () => set({ toast: { show: false, msg: "" } }),
+  clearToast: () => set({ toast: { show: false, msg: "", type: "success" } }),
 
   reset: () =>
     set({
       checked: {},
       removed: {},
       showConfirm: false,
-      toast: { show: false, msg: "" },
+      cleaning: false,
+      toast: { show: false, msg: "", type: "success" },
     }),
 }));

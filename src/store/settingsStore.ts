@@ -1,6 +1,7 @@
 // Settings store — owns the persisted AppSettings, loaded/saved via ipc.
 import { create } from "zustand";
 
+import { t } from "../i18n";
 import { getSettings, saveSettings } from "../lib/ipc";
 import type { AppSettings } from "../lib/types";
 
@@ -9,7 +10,7 @@ function getErrorMessage(error: unknown): string {
   if (typeof error === "object" && error && "message" in error) {
     return String((error as { message: unknown }).message);
   }
-  return "未知错误";
+  return t("shell.common.unknownError");
 }
 
 interface SettingsState {

@@ -1,29 +1,26 @@
-import { useEffect, useRef, useState } from "react";
-
 import { useAgent } from "../../hooks/useAgent";
 import { useI18n } from "../../i18n";
-import type { ToolEvent } from "../../store/agentStore";
 import { useScanStore } from "../../store/scanStore";
-import { LensLogo } from "../layout/TopBar";
+import { useSettingsStore } from "../../store/settingsStore";
+import { AppLogo } from "../layout/TopBar";
+import Composer from "./Composer";
 import ConfirmDialog from "./ConfirmDialog";
+import MessageList from "./MessageList";
 
 /**
- * Space Lens — right column AI chat (384px).
+ * TrueClean Agent — 右栏 AI 对话面板（384px）。
  *
- * Always present in the results stage. When collapsed (`agentStore.open === false`)
- * it shrinks to a 48px rail with the lens logo + vertical label; clicking the
- * rail expands the panel back to full width.
+ * Claude 风格：纯文字对话 + agent 标识 + 底部状态栏（auto 模式 + 工作目录）。
+ * 工作时显示 "TrueClean Agent" 标识，底部显示当前 auto 模式与工作目录，
+ * 让用户清楚知道 agent 在哪个磁盘范围内工作。
  *
- * Structure:
- *   header    — lens avatar + "空间助手" + subtitle + collapse chevron
- *   context   — "分析中" chip + current drill path (mono)
- *   messages  — scrollable transcript (AI left, user right)
- *   suggestions — quick-reply chips (shown when not streaming)
- *   input     — text field + send button
- *
- * Tool-call cards are interleaved into the assistant turn they belong to,
- * matched by `messageIndex`. Destructive-tool confirmations surface via
- * `ConfirmDialog` (reused from the existing agent module).
+ * 结构：
+ *   header       — agent avatar + "TrueClean Agent" 标识 + 收起按钮
+ *   context      — 工作目录 chip（mono 字体显示路径）
+ *   messages     — 滚动消息流（委托给 MessageList 渲染，含工具卡片）
+ *   suggestions  — 快捷回复 chips（非流式时显示）
+ *   composer     — 多行输入 + 发送/停止
+ *   statusbar    — 底部状态栏：auto 模式 + 工作目录 + agent 状态
  */
 export default function AgentPanel() {
   const {
@@ -32,38 +29,18 @@ export default function AgentPanel() {
     messages,
     events,
     confirmations,
+    reviews,
     error,
     isStreaming,
     send,
     cancel,
     confirm,
   } = useAgent();
-  const { t } = useI18n();
-  const target = useScanStore((s) => s.target);
-
-  const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll to the latest message when the transcript grows.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [messages, events, isStreaming]);
-
-  const submit = () => {
-    const text = input.trim();
-    if (!text || isStreaming) return;
-    void send(text);
-    setInput("");
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      submit();
-    }
-  };
+  const { t, value } = useI18n();
+  // P0-7：使用不可变的扫描根路径 scanTarget，作为 agent 的工作目录。
+  const scanTarget = useScanStore((s) => s.scanTarget);
+  // 读取当前 provider，用于状态栏显示。
+  const provider = useSettingsStore((s) => s.settings?.provider ?? "claude");
 
   // Collapsed rail — 48px wide, click to expand.
   if (!open) {
@@ -71,42 +48,54 @@ export default function AgentPanel() {
       <aside
         className="tc-right-collapsed"
         onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
         role="button"
         tabIndex={0}
-        aria-label={t("lens.right.collapseLabel")}
+        aria-label={t("agent.panel.expand")}
       >
         <span className="tc-right-collapsed__avatar">
-          <LensLogo size={18} />
+          <AppLogo size={18} />
         </span>
         <span className="tc-right-collapsed__label">
-          {t("lens.right.collapseLabel")}
+          {t("agent.panel.expand")}
         </span>
       </aside>
     );
   }
 
-  const suggestions = ["哪些能清理？", "缓存占多少？", "node_modules 在哪？"];
+  const suggestions = value<string[]>("agent.empty.suggestions") ?? [];
+  // 工作目录显示：截断过长的路径，保留末尾可读部分。
+  const workdir = scanTarget ?? "/";
+  const workdirDisplay =
+    workdir.length > 40 ? `…${workdir.slice(-38)}` : workdir;
 
   return (
     <>
-      <aside className="tc-right" aria-label={t("lens.right.title")}>
-        {/* Header */}
+      <aside className="tc-right" aria-label={t("agent.panel.title")}>
+        {/* Header — agent 标识 */}
         <div className="tc-right__header">
           <div className="tc-right__title-wrap">
             <span className="tc-right__avatar">
-              <LensLogo size={17} />
+              <AppLogo size={17} />
             </span>
             <div className="tc-right__title-stack">
-              <span className="tc-right__title">{t("lens.right.title")}</span>
-              <span className="tc-right__subtitle">{t("lens.right.subtitle")}</span>
+              <span className="tc-right__title">{t("agent.panel.title")}</span>
+              <span className="tc-right__subtitle">
+                {isStreaming ? t("agent.panel.working") : t("agent.panel.ready")}
+              </span>
             </div>
           </div>
           <button
             type="button"
             className="tc-right__close"
             onClick={() => setOpen(false)}
-            title={t("lens.right.collapse")}
-            aria-label={t("lens.right.collapse")}
+            title={t("agent.panel.collapse")}
+            aria-label={t("agent.panel.collapse")}
           >
             <svg
               width="14"
@@ -122,90 +111,27 @@ export default function AgentPanel() {
           </button>
         </div>
 
-        {/* Context chip — shows the current drill path. */}
-        <div className="tc-right__context">
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="1.7"
-            aria-hidden="true"
-          >
-            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          </svg>
-          <span className="tc-right__context-label">{t("lens.right.analyzing")}</span>
-          <span className="tc-right__context-path" title={target ?? ""}>
-            {target ?? "/"}
-          </span>
-        </div>
-
-        {/* Messages */}
-        <div className="tc-right__messages" ref={scrollRef}>
+        {/* Messages — 委托给 MessageList 渲染消息流 + 工具卡片。
+            空状态时显示欢迎气泡。 */}
+        <div className="tc-right__messages">
           {messages.length === 0 && (
             <div className="tc-msg">
               <span className="tc-msg__avatar">
-                <LensLogo size={14} />
+                <AppLogo size={14} />
               </span>
               <div className="tc-msg__bubble">
                 <div className="tc-msg__text">
-                  {t("lens.right.title")} — {t("lens.brand.name")}
+                  {t("agent.empty.greeting")}
                 </div>
               </div>
             </div>
           )}
 
-          {messages.map((m, i) => {
-            const isUser = m.role === "user";
-            const tools = events.filter(
-              (e: ToolEvent) => e.messageIndex === i && m.role === "assistant",
-            );
-            return (
-              <div key={i} className={`tc-msg${isUser ? " tc-msg--user" : ""}`}>
-                {!isUser && (
-                  <span className="tc-msg__avatar">
-                    <LensLogo size={14} />
-                  </span>
-                )}
-                <div className={`tc-msg__bubble${isUser ? " tc-msg__bubble--user" : ""}`}>
-                  {tools.length > 0 && (
-                    <div className="tc-msg__tools">
-                      {tools.map((tc) => (
-                        <div key={tc.id} className="tc-msg__tool">
-                          <span className="tc-msg__tool-dot" />
-                          <span className="tc-msg__tool-name">{tc.name}</span>
-                          <span className="tc-msg__tool-arg">
-                            {formatToolArg(tc.args)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {m.content && (
-                    <div
-                      className={`tc-msg__text${isUser ? " tc-msg__text--user" : ""}`}
-                    >
-                      {m.content}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {isStreaming && (
-            <div className="tc-msg">
-              <span className="tc-msg__avatar">
-                <LensLogo size={14} />
-              </span>
-              <div className="tc-msg__bubble tc-msg__typing">
-                <span className="tc-msg__typing-dot" />
-                <span className="tc-msg__typing-dot" />
-                <span className="tc-msg__typing-dot" />
-              </div>
-            </div>
-          )}
+          <MessageList
+            messages={messages}
+            events={events}
+            isStreaming={isStreaming}
+          />
 
           {error && (
             <div className="tc-msg__error" role="alert">
@@ -214,7 +140,7 @@ export default function AgentPanel() {
           )}
         </div>
 
-        {/* Suggestions */}
+        {/* Suggestions — 快捷回复 chips */}
         {!isStreaming && (
           <div className="tc-right__suggestions">
             {suggestions.map((s) => (
@@ -230,73 +156,44 @@ export default function AgentPanel() {
           </div>
         )}
 
-        {/* Input */}
-        <div className="tc-right__input-row">
-          <input
-            className="tc-right__input"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder={t("lens.right.placeholder")}
-            aria-label={t("lens.right.placeholder")}
-          />
-          {isStreaming ? (
-            <button
-              type="button"
-              className="tc-right__send is-active"
-              onClick={cancel}
-              aria-label="stop"
+        {/* Composer — 多行输入 + 发送/停止 */}
+        <Composer isStreaming={isStreaming} onSend={send} onStop={cancel} />
+
+        {/* 底部状态栏 — auto 模式 + 工作目录 + provider */}
+        <div className="tc-right__statusbar">
+          <span className="tc-right__status-item" title={t("agent.status.autoHint")}>
+            <span className="tc-right__status-dot" />
+            {t("agent.status.auto")}
+          </span>
+          <span className="tc-right__status-sep" aria-hidden="true">·</span>
+          <span className="tc-right__status-item tc-right__status-workdir" title={workdir}>
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              aria-hidden="true"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <rect x="6" y="6" width="12" height="12" rx="2" />
-              </svg>
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={`tc-right__send${input.trim().length > 0 ? " is-active" : ""}`}
-              onClick={submit}
-              disabled={input.trim().length === 0}
-              aria-label="send"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M7 12h12M13 6l6 6-6 6" />
-              </svg>
-            </button>
-          )}
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            </svg>
+            <code>{workdirDisplay}</code>
+          </span>
+          <span className="tc-right__status-sep" aria-hidden="true">·</span>
+          <span className="tc-right__status-item tc-right__status-provider">
+            {provider}
+          </span>
         </div>
       </aside>
 
       {confirmations.length > 0 && (
-        <ConfirmDialog confirmation={confirmations[0]} onConfirm={confirm} />
+        <ConfirmDialog
+          confirmation={confirmations[0]}
+          review={reviews.length > 0 ? reviews[reviews.length - 1] : undefined}
+          onConfirm={confirm}
+        />
       )}
     </>
   );
-}
-
-/** Format tool args for the compact tool card display. */
-function formatToolArg(args: unknown): string {
-  if (args === null || args === undefined) return "";
-  if (typeof args === "string") return args;
-  try {
-    const obj = args as Record<string, unknown>;
-    const firstKey = Object.keys(obj)[0];
-    if (firstKey) {
-      const val = obj[firstKey];
-      return typeof val === "string" ? val : JSON.stringify(val).slice(0, 60);
-    }
-    return JSON.stringify(args).slice(0, 60);
-  } catch {
-    return "";
-  }
 }

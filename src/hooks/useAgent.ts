@@ -10,6 +10,7 @@ export function useAgent() {
   const messages = useAgentStore((s) => s.messages);
   const events = useAgentStore((s) => s.events);
   const confirmations = useAgentStore((s) => s.confirmations);
+  const reviews = useAgentStore((s) => s.reviews);
   const status = useAgentStore((s) => s.status);
   const error = useAgentStore((s) => s.error);
   const send = useAgentStore((s) => s.send);
@@ -24,6 +25,7 @@ export function useAgent() {
     messages,
     events,
     confirmations,
+    reviews,
     status,
     error,
     send,

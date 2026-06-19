@@ -6,7 +6,8 @@ import type { Category, DirNode } from "./types";
 
 /** Category visual metadata. Colors mirror tokens.css --cat-* variables. */
 export interface CatMeta {
-  label: string;
+  /** i18n category key — pass to `t("scan.category." + categoryKey)` for the label. */
+  categoryKey: string;
   color: string;
   /** SVG path body for the category icon (24x24 viewBox). */
   iconPath: string;
@@ -21,60 +22,61 @@ export const FILE_ICON =
   "M14 3v4a1 1 0 0 0 1 1h4M6 3h8l5 5v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z";
 
 /** Category metadata table. Keys mirror the Category enum in types.ts.
- *  Labels are the short Space Lens style (系统/应用/开发/媒体/缓存/日志/文档/下载/压缩/其他). */
+ *  `categoryKey` is the i18n key (matches `scan.category.<key>`); the visible
+ *  label is resolved at render time via `t("scan.category." + categoryKey)`. */
 export const CAT_META: Record<Category, CatMeta> = {
   system: {
-    label: "系统",
+    categoryKey: "system",
     color: "#62666d",
     iconPath: FOLDER_ICON,
   },
   applications: {
-    label: "应用",
+    categoryKey: "applications",
     color: "#5e6ad2",
     iconPath: FOLDER_ICON,
   },
   developer: {
-    label: "开发",
+    categoryKey: "developer",
     color: "#02b8cc",
     iconPath: FOLDER_ICON,
   },
   documents: {
-    label: "文档",
+    categoryKey: "documents",
     color: "#46a7a0",
     iconPath: FOLDER_ICON,
   },
   media: {
-    label: "媒体",
+    categoryKey: "media",
     color: "#27a644",
     iconPath: FOLDER_ICON,
   },
   caches: {
-    label: "缓存",
+    categoryKey: "caches",
     color: "#eb5757",
     iconPath: FOLDER_ICON,
   },
   logs: {
-    label: "日志",
+    categoryKey: "logs",
     color: "#c79a4e",
     iconPath: FOLDER_ICON,
   },
   trash: {
-    label: "废纸篓",
+    categoryKey: "trash",
     color: "#62666d",
     iconPath: FOLDER_ICON,
   },
   downloads: {
-    label: "下载",
+    categoryKey: "downloads",
     color: "#9b7ad2",
     iconPath: FOLDER_ICON,
   },
   archives: {
-    label: "压缩",
+    categoryKey: "archives",
     color: "#cf6f93",
     iconPath: FOLDER_ICON,
   },
   other: {
-    label: "其他",
+    categoryKey: "other",
     color: "#8a8f98",
     iconPath: FOLDER_ICON,
   },

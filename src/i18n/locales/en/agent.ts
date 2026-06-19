@@ -7,10 +7,27 @@ export const agent = {
   close: "Close assistant panel",
   scrollBottom: "Scroll to bottom",
 
+  // AgentPanel identity and status
+  panel: {
+    title: "TrueClean Agent",
+    subtitle: "Disk cleanup & system optimization expert",
+    expand: "Expand assistant",
+    collapse: "Collapse assistant",
+    working: "Working…",
+    ready: "Ready",
+  },
+
+  // Bottom status bar
+  status: {
+    auto: "auto",
+    autoHint: "Auto mode: agent plans before acting; destructive actions need your confirmation",
+  },
+
   empty: {
     badge: "✦",
     title: "I'm your TrueClean assistant",
     sub: "I can scan your disk, find junk and large files, and help you reclaim space safely.",
+    greeting: "Hi, I'm TrueClean Agent. Tell me what you want to clean and I'll scan first, then give you tiered advice.",
     suggestions: [
       "How much space can I free up?",
       "Find large files over 1GB",
@@ -47,6 +64,7 @@ export const agent = {
     highlights: "Key findings",
     noResult: "Waiting for result…",
     truncated: "(content truncated)",
+    calling: "Calling {name}…",
   },
 
   dataNature: {
@@ -73,6 +91,11 @@ export const agent = {
     irreversible: "This action is irreversible. Please confirm carefully.",
   },
 
+  review: {
+    approved: "Review approved",
+    rejected: "Review rejected",
+  },
+
   suggestion: {
     cleanNow: "Clean now",
     review: "Review first",
@@ -85,6 +108,12 @@ export const agent = {
 
   error: {
     default: "Something went wrong. Please retry.",
+  },
+
+  typing: "Typing",
+
+  toolCall: {
+    itemCount: "{count} items",
   },
 } as const;
 

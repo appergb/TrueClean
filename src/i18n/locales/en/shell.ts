@@ -33,6 +33,11 @@ export const shell = {
     close: "Close",
     confirm: "Confirm",
     back: "Back",
+    unknownError: "Unknown error",
+  },
+  toast: {
+    close: "Close notification",
+    region: "Notifications",
   },
   overview: {
     eyebrow: "Disk Health",
@@ -81,6 +86,7 @@ export const shell = {
     desc: "Sorry, an unexpected error occurred. You can retry the current view or reload the whole app.",
     retry: "Retry",
     reload: "Reload app",
+    crashTest: "Crash test (dev)",
   },
   ring: {
     used: "{pct} used",

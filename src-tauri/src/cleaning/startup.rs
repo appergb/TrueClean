@@ -45,6 +45,16 @@ pub fn list_startup_items() -> AppResult<Vec<StartupItem>> {
 pub fn set_startup_item(id: &str, enabled: bool) -> AppResult<()> {
     let path = PathBuf::from(id);
 
+    // P0-6: 安全门控 — 受保护的系统路径（如 /Library/LaunchDaemons 下的系统
+    // 守护进程）不能被修改，否则可能导致系统无法启动。该检查覆盖所有路径修改
+    // 方式（rename 与 Linux .desktop 改写），统一在入口处拦截。
+    if crate::cleaning::safety::is_protected(&path) {
+        return Err(AppError::PermissionDenied(format!(
+            "受保护的启动项不能修改: {}",
+            path.display()
+        )));
+    }
+
     // Linux .desktop files toggle via the `Hidden` key rather than renaming.
     #[cfg(target_os = "linux")]
     {
@@ -436,5 +446,27 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(&work);
+    }
+
+    /// P0-6: 受保护路径（如 /System 下的文件）必须被 set_startup_item 拒绝。
+    #[test]
+    fn set_startup_item_refuses_protected_path() {
+        let protected = if cfg!(target_os = "macos") {
+            "/System/Library/LaunchDaemons/com.apple.foo.plist".to_string()
+        } else if cfg!(target_os = "windows") {
+            "C:\\Windows\\System32\\foo.exe".to_string()
+        } else {
+            "/usr/lib/systemd/system/foo.service".to_string()
+        };
+        let res = set_startup_item(&protected, false);
+        assert!(
+            res.is_err(),
+            "modifying a protected startup item must be refused"
+        );
+        let err = res.unwrap_err();
+        assert!(
+            matches!(err, AppError::PermissionDenied(_)),
+            "expected PermissionDenied, got {err:?}"
+        );
     }
 }

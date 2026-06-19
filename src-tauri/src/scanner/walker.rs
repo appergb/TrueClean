@@ -117,7 +117,10 @@ impl<'a> ScanCtx<'a> {
         // One lock: update totals, then decide whether to emit. Emitting
         // outside the lock keeps a slow `on_progress` from blocking peers.
         let should_emit = {
-            let mut st = self.state.lock().expect("state lock poisoned");
+            let mut st = self
+                .state
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             let slot = &mut st.totals[category_index(category)];
             slot.0 += size;
             slot.1 += 1;
@@ -137,11 +140,17 @@ impl<'a> ScanCtx<'a> {
     }
 
     fn record_skip(&self) {
-        self.state.lock().expect("state lock poisoned").skipped += 1;
+        self.state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .skipped += 1;
     }
 
     fn record_error(&self) {
-        self.state.lock().expect("state lock poisoned").errors += 1;
+        self.state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .errors += 1;
     }
 
     /// 记录一次权限拒绝错误。与 [`record_error`] 分开统计，便于前端区分
@@ -149,7 +158,7 @@ impl<'a> ScanCtx<'a> {
     fn record_permission_error(&self) {
         self.state
             .lock()
-            .expect("state lock poisoned")
+            .unwrap_or_else(|e| e.into_inner())
             .permission_denied += 1;
     }
 
@@ -167,7 +176,10 @@ impl<'a> ScanCtx<'a> {
     /// Snapshot the category totals and skip/error counters. Locks once and
     /// copies (arrays are `Copy`); safe to call after the walk finishes.
     pub(crate) fn snapshot(&self) -> ([(u64, u64); CATEGORY_COUNT], ScanStats) {
-        let st = self.state.lock().expect("state lock poisoned");
+        let st = self
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         (
             st.totals,
             ScanStats {
@@ -221,7 +233,52 @@ pub(crate) fn walk<'a>(root: &Path, ctx: &ScanCtx<'a>) -> AppResult<RawNode> {
         return Err(AppError::Cancelled);
     }
     ctx.emit(root, false);
-    visit_dir(root, 0, ctx, &[])
+    visit_dir(root, 0, ctx, &[], root)
+}
+
+/// P0: 判断一个子目录路径是否应被跳过（不递归进入）。
+///
+/// 解决 macOS APFS firmlink 导致的重复计数问题：
+/// - `/System/Volumes/Data` 是 APFS 数据卷，其内容通过 firmlink 已出现在
+///   `/` 的其他位置（`/Users`、`/Library` 等）。扫描 `/` 时若再进入此目录，
+///   所有用户数据会被重复计算，导致 200GB 盘扫出 10TB。
+/// - `/System/Volumes/` 下的辅助卷（Preboot/Recovery/VM/Update/Hardware）
+///   同理应跳过。
+/// - `/dev` 是虚拟文件系统，不应扫入。
+/// - `/private/var/vm` 存放交换文件，不是用户数据。
+/// - `/System/Volumes/VM` 是交换空间卷。
+///
+/// 仅在扫描根为 `/` 或 `/System/Volumes/Data` 时触发这些排除规则，
+/// 避免影响用户对特定子目录的扫描。
+fn should_skip_subdir(path: &Path, scan_root: &Path) -> bool {
+    let path_str = path.to_string_lossy();
+    let root_str = scan_root.to_string_lossy();
+
+    // 仅当扫描根是 / 或 /System/Volumes/Data 时才应用排除规则。
+    // 这些根目录会通过 firmlink 看到重复数据。
+    let is_root_scan = root_str == "/" || root_str == "/System/Volumes/Data";
+    if !is_root_scan {
+        return false;
+    }
+
+    // macOS: 跳过 /System/Volumes/ 下的所有子目录。
+    // Data 卷的内容已通过 firmlink 出现在 / 下；辅助卷不是用户数据。
+    #[cfg(target_os = "macos")]
+    {
+        if path_str.starts_with("/System/Volumes/") {
+            return true;
+        }
+        // 虚拟文件系统。
+        if path_str == "/dev" || path_str.starts_with("/dev/") {
+            return true;
+        }
+        // 交换文件目录。
+        if path_str == "/private/var/vm" || path_str.starts_with("/private/var/vm/") {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// Recursively visit a directory, returning its aggregated `RawNode`.
@@ -229,7 +286,15 @@ pub(crate) fn walk<'a>(root: &Path, ctx: &ScanCtx<'a>) -> AppResult<RawNode> {
 /// `ancestors` holds the canonical paths of followed symlinks along this
 /// descent — used to break cycles when `follow_symlinks` is enabled. It is
 /// empty in the common (non-following) case, so the per-subdir clone is free.
-fn visit_dir(dir: &Path, depth: usize, ctx: &ScanCtx, ancestors: &[PathBuf]) -> AppResult<RawNode> {
+/// `scan_root` is the original scan root path, used by `should_skip_subdir`
+/// to exclude macOS APFS firmlink duplicates.
+fn visit_dir(
+    dir: &Path,
+    depth: usize,
+    ctx: &ScanCtx,
+    ancestors: &[PathBuf],
+    scan_root: &Path,
+) -> AppResult<RawNode> {
     if ctx.cancelled() {
         return Err(AppError::Cancelled);
     }
@@ -338,6 +403,11 @@ fn visit_dir(dir: &Path, depth: usize, ctx: &ScanCtx, ancestors: &[PathBuf]) -> 
         }
 
         if file_type.is_dir() {
+            // P0: 跳过 macOS APFS firmlink 重复路径和虚拟文件系统。
+            if should_skip_subdir(&path, scan_root) {
+                ctx.record_skip();
+                continue;
+            }
             // Regular directories cannot form cycles on their own; pass the
             // ancestor set through unchanged (empty in the common case, so the
             // clone allocates nothing).
@@ -358,7 +428,7 @@ fn visit_dir(dir: &Path, depth: usize, ctx: &ScanCtx, ancestors: &[PathBuf]) -> 
     } else {
         let results: Vec<AppResult<RawNode>> = subdirs
             .par_iter()
-            .map(|(sub, anc)| visit_dir(sub, depth + 1, ctx, anc))
+            .map(|(sub, anc)| visit_dir(sub, depth + 1, ctx, anc, scan_root))
             .collect();
         let mut kept = Vec::with_capacity(results.len());
         for r in results {
@@ -374,8 +444,27 @@ fn visit_dir(dir: &Path, depth: usize, ctx: &ScanCtx, ancestors: &[PathBuf]) -> 
         kept
     };
 
-    let children_size: u64 = children.iter().map(|c| c.size_bytes).sum();
-    let children_files: u64 = children.iter().map(|c| c.file_count).sum();
+    // P0-9: 当 beyond_depth 为 true 时，children 为空，但子目录的大小不能丢。
+    // 用 shallow_dir_size 对每个子目录做一次不建树的递归求和，把大小与文件数
+    // 累加到当前节点，保证父目录的 size_bytes / file_count 仍反映完整子树。
+    let (children_size, children_files): (u64, u64) = if beyond_depth {
+        let mut size = 0u64;
+        let mut count = 0u64;
+        for (sub, _anc) in &subdirs {
+            if ctx.cancelled() {
+                return Err(AppError::Cancelled);
+            }
+            let (s, c) = shallow_dir_size(sub, ctx, scan_root);
+            size += s;
+            count += c;
+        }
+        (size, count)
+    } else {
+        (
+            children.iter().map(|c| c.size_bytes).sum(),
+            children.iter().map(|c| c.file_count).sum(),
+        )
+    };
 
     Ok(RawNode {
         name,
@@ -386,6 +475,76 @@ fn visit_dir(dir: &Path, depth: usize, ctx: &ScanCtx, ancestors: &[PathBuf]) -> 
         is_dir: true,
         children,
     })
+}
+
+/// P0-9: 递归求和 `dir` 下所有文件的总大小与文件数，但不构建 `RawNode` 子树。
+///
+/// 用于 `beyond_depth` 场景：当目录深度超过 `max_depth` 时，我们不再展开
+/// 树结构，但仍需把子目录的真实大小累加到父节点，避免大小"凭空消失"。
+///
+/// 每个文件仍通过 `ctx.record_file` 记录，保证分类统计与进度计数准确。
+/// 权限错误与不可读条目静默跳过（已在源头计数）。符号链接在此不跟随 —
+/// 祖先链环检测仅在 `visit_dir` 中可用，这里跳过符号链接以避免循环与重复计数。
+/// `scan_root` 用于 `should_skip_subdir` 排除 macOS firmlink 重复路径。
+fn shallow_dir_size(dir: &Path, ctx: &ScanCtx, scan_root: &Path) -> (u64, u64) {
+    let mut size = 0u64;
+    let mut count = 0u64;
+
+    let read = match std::fs::read_dir(dir) {
+        Ok(rd) => rd,
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::PermissionDenied {
+                ctx.record_permission_error();
+            } else {
+                ctx.record_error();
+            }
+            return (0, 0);
+        }
+    };
+
+    for entry in read.flatten() {
+        if ctx.cancelled() {
+            return (size, count);
+        }
+        let path = entry.path();
+
+        if !ctx.options.include_hidden && is_hidden(&path) {
+            continue;
+        }
+
+        let meta = match std::fs::symlink_metadata(&path) {
+            Ok(m) => m,
+            Err(_) => {
+                ctx.record_skip();
+                continue;
+            }
+        };
+
+        let file_type = meta.file_type();
+        if file_type.is_symlink() {
+            // 不跟随符号链接：祖先链环检测仅在 visit_dir 中可用，
+            // 这里跳过以避免循环与重复计数。
+            continue;
+        }
+
+        if file_type.is_dir() {
+            // P0: 跳过 macOS APFS firmlink 重复路径和虚拟文件系统。
+            if should_skip_subdir(&path, scan_root) {
+                ctx.record_skip();
+                continue;
+            }
+            let (s, c) = shallow_dir_size(&path, ctx, scan_root);
+            size += s;
+            count += c;
+        } else {
+            let s = meta.len();
+            size += s;
+            count += 1;
+            ctx.record_file(classify(&path, false), s, &path);
+        }
+    }
+
+    (size, count)
 }
 
 fn display_name(path: &Path) -> String {
@@ -502,5 +661,167 @@ mod tests {
         );
 
         fs::remove_dir_all(&base).ok();
+    }
+
+    /// P0-9: 当 max_depth 限制深度时，超出深度的子目录大小仍应被累加到
+    /// 根节点的 size_bytes，不能丢失。
+    #[test]
+    fn beyond_depth_subtree_size_is_not_lost() {
+        // 构造结构：
+        //   root/
+        //     a.txt          (10 bytes)
+        //     sub/
+        //       b.txt        (20 bytes)
+        //       deep/
+        //         c.txt      (30 bytes)
+        //         deeper/
+        //           d.txt    (40 bytes)
+        // 设 max_depth=1：root 自身深度 0，sub 深度 1（== max，beyond_depth
+        // 在 sub 的子调用中触发）。root 应仍报告全部 100 bytes。
+        let base = std::env::temp_dir().join(format!(
+            "tc_beyond_depth_{}_{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(base.join("sub/deep/deeper")).unwrap();
+        fs::write(base.join("a.txt"), vec![0u8; 10]).unwrap();
+        fs::write(base.join("sub/b.txt"), vec![0u8; 20]).unwrap();
+        fs::write(base.join("sub/deep/c.txt"), vec![0u8; 30]).unwrap();
+        fs::write(base.join("sub/deep/deeper/d.txt"), vec![0u8; 40]).unwrap();
+
+        let options = ScanOptions {
+            max_depth: Some(1),
+            ..ScanOptions::default()
+        };
+        let cancel = AtomicBool::new(false);
+        let ctx = ScanCtx::new(&options, &cancel, &|_p| {});
+        let root = walk(&base, &ctx).unwrap();
+
+        // 根节点大小应包含所有文件：10 + 20 + 30 + 40 = 100
+        assert_eq!(
+            root.size_bytes, 100,
+            "beyond-depth subtree size must be counted, got {}",
+            root.size_bytes
+        );
+        // 文件数应为 4
+        assert_eq!(
+            root.file_count, 4,
+            "beyond-depth file count must be counted, got {}",
+            root.file_count
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// P0-9: shallow_dir_size 应正确递归求和目录下所有文件大小。
+    #[test]
+    fn shallow_dir_size_sums_recursively() {
+        let base = std::env::temp_dir().join(format!(
+            "tc_shallow_{}_{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(base.join("a/b/c")).unwrap();
+        fs::write(base.join("f1.txt"), vec![0u8; 10]).unwrap();
+        fs::write(base.join("a/f2.txt"), vec![0u8; 20]).unwrap();
+        fs::write(base.join("a/b/f3.txt"), vec![0u8; 30]).unwrap();
+        fs::write(base.join("a/b/c/f4.txt"), vec![0u8; 40]).unwrap();
+
+        let options = ScanOptions::default();
+        let cancel = AtomicBool::new(false);
+        let ctx = ScanCtx::new(&options, &cancel, &|_p| {});
+        let (size, count) = shallow_dir_size(&base, &ctx, &base);
+
+        assert_eq!(size, 100, "shallow_dir_size should sum all files");
+        assert_eq!(count, 4, "shallow_dir_size should count all files");
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// P0: 权限拒绝错误应被单独计数到 `permission_denied_count`，便于前端
+    /// 区分 "权限不足需授权" 与 "普通 IO 错误"。
+    ///
+    /// 仅在 Unix 上运行：通过创建 000 权限子目录模拟权限拒绝。Windows 上
+    /// 难以可靠模拟，故跳过。
+    #[test]
+    #[cfg(unix)]
+    fn permission_denied_errors_are_counted() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = std::env::temp_dir().join(format!(
+            "tc_perm_{}_{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&base).unwrap();
+        // 创建一个无读权限的子目录，并在其中放一个文件（虽然读不到）。
+        let locked = base.join("locked");
+        fs::create_dir_all(&locked).unwrap();
+        fs::write(locked.join("secret.txt"), b"hidden").unwrap();
+        // 撤销所有权限（包括读/执行）。
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+
+        let options = ScanOptions::default();
+        let cancel = AtomicBool::new(false);
+        let ctx = ScanCtx::new(&options, &cancel, &|_p| {});
+        let _ = walk(&base, &ctx).unwrap();
+        let (_totals, stats) = ctx.snapshot();
+
+        // 恢复权限以便后续清理。
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).ok();
+        fs::remove_dir_all(&base).ok();
+
+        assert!(
+            stats.permission_denied_count > 0,
+            "permission_denied_count 应 > 0，实际: {}",
+            stats.permission_denied_count
+        );
+    }
+
+    /// P0: should_skip_subdir 应正确识别 macOS APFS firmlink 重复路径。
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn should_skip_subdir_excludes_macos_firmlinks() {
+        use std::path::Path;
+
+        // 扫描根为 / 时，/System/Volumes/ 下的路径应被跳过。
+        assert!(should_skip_subdir(
+            Path::new("/System/Volumes/Data"),
+            Path::new("/")
+        ));
+        assert!(should_skip_subdir(
+            Path::new("/System/Volumes/Preboot"),
+            Path::new("/")
+        ));
+        assert!(should_skip_subdir(
+            Path::new("/System/Volumes/Data/Users"),
+            Path::new("/")
+        ));
+        // /dev 虚拟文件系统应被跳过。
+        assert!(should_skip_subdir(Path::new("/dev"), Path::new("/")));
+        // /private/var/vm 交换文件应被跳过。
+        assert!(should_skip_subdir(
+            Path::new("/private/var/vm"),
+            Path::new("/")
+        ));
+
+        // 正常路径不应被跳过。
+        assert!(!should_skip_subdir(
+            Path::new("/Users"),
+            Path::new("/")
+        ));
+        assert!(!should_skip_subdir(
+            Path::new("/Applications"),
+            Path::new("/")
+        ));
+        assert!(!should_skip_subdir(
+            Path::new("/Library"),
+            Path::new("/")
+        ));
+
+        // 扫描根不是 / 时，不应用排除规则。
+        assert!(!should_skip_subdir(
+            Path::new("/System/Volumes/Data"),
+            Path::new("/Volumes/External")
+        ));
     }
 }

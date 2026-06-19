@@ -6,6 +6,7 @@
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
+import { useI18n } from "../../i18n";
 import { type ToastItem, type ToastKind,useToastStore } from "./toastStore";
 
 interface ToastApi {
@@ -65,6 +66,7 @@ const ICONS: Record<ToastKind, ReactNode> = {
 
 function ToastCard({ toast }: { toast: ToastItem }) {
   const dismiss = useToastStore((s) => s.dismiss);
+  const { t } = useI18n();
 
   useEffect(() => {
     if (toast.duration <= 0) return;
@@ -91,7 +93,7 @@ function ToastCard({ toast }: { toast: ToastItem }) {
       <button
         type="button"
         className="tc-toast__close"
-        aria-label="关闭通知"
+        aria-label={t("shell.toast.close")}
         onClick={() => dismiss(toast.id)}
       >
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -105,11 +107,12 @@ function ToastCard({ toast }: { toast: ToastItem }) {
 /** Fixed toast stack — mount once at the app root. */
 export function ToastViewport() {
   const toasts = useToastStore((s) => s.toasts);
+  const { t } = useI18n();
   if (toasts.length === 0) return null;
   return (
-    <div className="tc-toast-viewport" aria-label="通知" role="region">
-      {toasts.map((t) => (
-        <ToastCard key={t.id} toast={t} />
+    <div className="tc-toast-viewport" aria-label={t("shell.toast.region")} role="region">
+      {toasts.map((item) => (
+        <ToastCard key={item.id} toast={item} />
       ))}
     </div>
   );

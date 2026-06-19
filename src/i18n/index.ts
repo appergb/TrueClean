@@ -41,6 +41,22 @@ function lookup(dict: unknown, key: string): string | undefined {
   return typeof cur === "string" ? cur : undefined;
 }
 
+/** Resolve a dot-path key and return the raw value (string, array, object, …).
+ *  Falls back to the zh dictionary, then undefined. Useful for non-string
+ *  values like the `agent.empty.suggestions` array. */
+function lookupRaw(dict: unknown, key: string): unknown {
+  const parts = key.split(".");
+  let cur: unknown = dict;
+  for (const part of parts) {
+    if (cur && typeof cur === "object" && part in (cur as Record<string, unknown>)) {
+      cur = (cur as Record<string, unknown>)[part];
+    } else {
+      return undefined;
+    }
+  }
+  return cur;
+}
+
 /** Replace {name} placeholders with params. Unknown placeholders are kept. */
 function interpolate(template: string, params?: TParams): string {
   if (!params) return template;
@@ -58,6 +74,8 @@ export function translate(locale: Locale, key: string, params?: TParams): string
 export interface UseI18nResult {
   /** Reactive translator — re-renders when the locale changes. */
   t: (key: string, params?: TParams) => string;
+  /** Reactive raw-value lookup — returns arrays/objects/strings unchanged. */
+  value: <T = unknown>(key: string) => T | undefined;
   locale: Locale;
   setLocale: (locale: Locale) => void;
 }
@@ -70,7 +88,14 @@ export function useI18n(): UseI18nResult {
     (key: string, params?: TParams) => translate(locale, key, params),
     [locale],
   );
-  return { t, locale, setLocale };
+  const value = useCallback(
+    <T = unknown>(key: string): T | undefined => {
+      const raw = lookupRaw(dictionaries[locale], key) ?? lookupRaw(dictionaries.zh, key);
+      return raw as T | undefined;
+    },
+    [locale],
+  );
+  return { t, value, locale, setLocale };
 }
 
 /** Standalone translator for non-React contexts (reads current locale once). */

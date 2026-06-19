@@ -19,25 +19,24 @@ import { useScanStore } from "../../store/scanStore";
 export default function ScanProgress() {
   const { t } = useI18n();
   const progress = useScanStore((s) => s.progress);
-  const target = useScanStore((s) => s.target);
+  const scanTarget = useScanStore((s) => s.scanTarget);
   const volumes = useScanStore((s) => s.volumes);
   const cancel = useScanStore((s) => s.cancel);
 
   const scannedFiles = progress?.scannedFiles ?? 0;
   const scannedBytes = progress?.scannedBytes ?? 0;
-  const currentPath = progress?.currentPath ?? target ?? "";
+  const currentPath = progress?.currentPath ?? scanTarget ?? "";
 
   const pct = useMemo(() => {
     const vol = volumes.find(
-      (v) => v.mountPoint === target || target?.startsWith(v.mountPoint),
+      (v) => v.mountPoint === scanTarget || scanTarget?.startsWith(v.mountPoint),
     );
     if (vol && vol.totalBytes > 0) {
       return Math.min(99, Math.round((scannedBytes / vol.totalBytes) * 100));
     }
-    // No volume total — show a slow auto-advance based on scanned files so
-    // the ring always feels alive without lying about completion.
+    // 无卷总量时——基于已扫描文件数缓慢自增，让圆环始终"活着"。
     return Math.min(99, Math.floor(Math.log10(scannedFiles + 1) * 12));
-  }, [volumes, target, scannedBytes, scannedFiles]);
+  }, [volumes, scanTarget, scannedBytes, scannedFiles]);
 
   const barWidth = `${pct}%`;
 

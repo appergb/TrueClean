@@ -10,19 +10,27 @@ use tauri::State;
 /// Start a streaming agent turn. Emits `AgentEvent`s on
 /// `agent://event/{session_id}` until the model finishes or is cancelled.
 ///
+/// `scan_target` 是用户已扫描确认的工作目录根路径，会注入系统提示词约束
+/// agent 的所有文件操作在此路径内。前端从 scanStore.scanTarget 传入。
+///
 /// State is read out (settings) and a cancel flag registered *before* any
 /// `.await`, so the non-`Send` `State` guard is never held across awaits.
 #[tauri::command]
 pub async fn agent_chat(
     session_id: String,
     messages: Vec<ChatMessage>,
+    scan_target: Option<String>,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<()> {
-    let settings = state.settings.lock().unwrap().clone();
+    let settings = state
+        .settings
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     let cancel = state.new_cancel(&session_id);
 
-    let result = runner::run_chat(session_id.clone(), messages, settings, app, cancel).await;
+    let result = runner::run_chat(session_id.clone(), messages, settings, scan_target, app, cancel).await;
 
     state.clear_cancel(&session_id);
     result

@@ -61,11 +61,29 @@ pub async fn stream_chat(
     tools: &[Value],
     on_delta: &mut (dyn FnMut(ProviderDelta) + Send),
 ) -> AppResult<String> {
+    // 向后兼容：使用默认 base_url 委托给 stream_chat_with_base。
+    stream_chat_with_base(http, api_key, DEFAULT_BASE, model, system, messages, tools, on_delta).await
+}
+
+/// 与 `stream_chat` 相同，但允许调用方传入自定义 `base_url`（用于 OpenAI 兼容
+/// 的第三方服务，如 DeepSeek）。`base_url` 末尾的斜杠会被去掉。
+pub async fn stream_chat_with_base(
+    http: &reqwest::Client,
+    api_key: &str,
+    base_url: &str,
+    model: &str,
+    system: &str,
+    messages: &[ChatMessage],
+    tools: &[Value],
+    on_delta: &mut (dyn FnMut(ProviderDelta) + Send),
+) -> AppResult<String> {
     if api_key.trim().is_empty() {
         return Err(AppError::Config("OpenAI API Key 未配置".into()));
     }
 
-    let url = format!("{}/v1/chat/completions", DEFAULT_BASE);
+    // 去掉末尾斜杠，避免出现 `//v1/chat/completions`。
+    let base = base_url.trim_end_matches('/');
+    let url = format!("{base}/v1/chat/completions");
     let body = json!({
         "model": model,
         "messages": build_messages(system, messages),

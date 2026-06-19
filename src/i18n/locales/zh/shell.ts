@@ -33,6 +33,11 @@ export const shell = {
     close: "关闭",
     confirm: "确认",
     back: "返回",
+    unknownError: "未知错误",
+  },
+  toast: {
+    close: "关闭通知",
+    region: "通知",
   },
   overview: {
     eyebrow: "磁盘健康",
@@ -81,6 +86,7 @@ export const shell = {
     desc: "抱歉，发生了意外错误。你可以重试当前视图，或刷新整个应用。",
     retry: "重试",
     reload: "刷新应用",
+    crashTest: "崩溃测试（开发）",
   },
   ring: {
     used: "{pct} 已使用",

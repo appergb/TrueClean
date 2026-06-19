@@ -90,14 +90,6 @@ export interface ScanProgress {
   done: boolean;
 }
 
-export interface FileEntry {
-  path: string;
-  name: string;
-  sizeBytes: number;
-  modified: number | null;
-  category: Category;
-}
-
 export type JunkKind =
   | "userCache"
   | "systemCache"
@@ -116,48 +108,6 @@ export interface JunkItem {
   safe: boolean;
 }
 
-export interface JunkGroup {
-  id: string;
-  label: string;
-  kind: JunkKind;
-  description: string;
-  totalBytes: number;
-  items: JunkItem[];
-  recommended: boolean;
-}
-
-export interface DuplicateGroup {
-  hash: string;
-  sizeBytes: number;
-  files: FileEntry[];
-  wastedBytes: number;
-}
-
-export interface AppInfo {
-  id: string;
-  name: string;
-  path: string;
-  version: string | null;
-  bundleId: string | null;
-  sizeBytes: number;
-  lastUsed: number | null;
-}
-
-export interface UninstallReport {
-  app: string;
-  removedPaths: string[];
-  freedBytes: number;
-  leftoverPaths: string[];
-}
-
-export interface StartupItem {
-  id: string;
-  name: string;
-  path: string;
-  enabled: boolean;
-  kind: string;
-}
-
 export interface CleanReport {
   removedCount: number;
   freedBytes: number;
@@ -166,18 +116,31 @@ export interface CleanReport {
 }
 
 export interface AppSettings {
-  provider: "claude" | "openai" | "ollama";
+  provider: "claude" | "openai" | "ollama" | "deepseek";
   model: string;
   claudeApiKey: string;
   openaiApiKey: string;
   ollamaBaseUrl: string;
+  /** DeepSeek API Key（存于系统钥匙串，settings.json 中为空串）。 */
+  deepseekApiKey: string;
+  /** DeepSeek 自定义连接地址，默认 https://api.deepseek.com。 */
+  deepseekBaseUrl: string;
+  /** Claude 自定义连接地址，默认 https://api.anthropic.com。 */
+  claudeBaseUrl: string;
+  /** OpenAI 自定义连接地址，默认 https://api.openai.com。 */
+  openaiBaseUrl: string;
   language: "zh" | "en";
   defaultToTrash: boolean;
+  scanOptions: ScanOptions;
 }
 
 export interface ChatMessage {
   role: "user" | "assistant" | "tool" | "system";
   content: string;
+  /** OpenAI 多轮工具调用：role === "tool" 时引用对应的 tool_call_id。 */
+  toolCallId?: string;
+  /** assistant 消息发起的工具调用列表（JSON 字符串，OpenAI 兼容格式）。 */
+  toolCalls?: string;
 }
 
 export type AgentEvent =
@@ -190,6 +153,14 @@ export type AgentEvent =
       toolName: string;
       args: unknown;
       summary: string;
+    }
+  | { type: "selection"; paths: string[]; reason: string }
+  | {
+      type: "review";
+      pathCount: number;
+      approved: boolean;
+      summary: string;
+      flaggedPaths: string[];
     }
   | { type: "done"; stopReason: string }
   | { type: "error"; message: string };

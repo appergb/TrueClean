@@ -21,20 +21,28 @@ impl AppState {
         let flag = Arc::new(AtomicBool::new(false));
         self.cancels
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(id.to_string(), flag.clone());
         flag
     }
 
     /// Signal cancellation for an id, if registered.
     pub fn cancel(&self, id: &str) {
-        if let Some(flag) = self.cancels.lock().unwrap().get(id) {
+        if let Some(flag) = self
+            .cancels
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(id)
+        {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
     /// Remove a finished cancellation flag.
     pub fn clear_cancel(&self, id: &str) {
-        self.cancels.lock().unwrap().remove(id);
+        self.cancels
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
     }
 }

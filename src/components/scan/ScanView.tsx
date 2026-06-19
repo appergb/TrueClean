@@ -5,16 +5,14 @@ import { useScan } from "../../hooks/useScan";
 import { useI18n } from "../../i18n";
 import { fmtBytes } from "../../lib/lens-utils";
 import type { VolumeInfo } from "../../lib/types";
+import { PermissionGuide } from "../layout/PermissionGuide";
+import { AppLogo } from "../layout/TopBar";
 
 /**
- * Space Lens — Landing stage.
+ * Landing 阶段 — 应用图标 + 扫描入口。
  *
- * Centered lens animation (rotating rings + conic sweep + pulsing core) with
- * the brand title, a short description, a disk picker, and the primary
- * "扫描磁盘" action. Shown when `scanStore.status === "idle"`.
- *
- * The lens animation is pure CSS (keyframes in global.css): `lensspin` drives
- * the conic sweep, `lensspinrev` the dashed ring, `lenspulse` the core dot.
+ * 中间展示 TrueClean 应用图标（替代原先的透镜动画），下方是磁盘选择器
+ * 和"扫描磁盘"主按钮。权限不足时底部显示 PermissionGuide。
  */
 export default function ScanView() {
   const { t } = useI18n();
@@ -34,7 +32,7 @@ export default function ScanView() {
 
   const diskLabel = useMemo(() => {
     if (selected) return selected.name || selected.mountPoint;
-    return t("lens.brand.tag");
+    return t("shell.brand.tag");
   }, [selected, t]);
 
   const diskSizeLabel = useMemo(() => {
@@ -56,15 +54,9 @@ export default function ScanView() {
 
   return (
     <div className="tc-landing">
-      {/* Lens animation — 280×280, pure CSS keyframes. */}
-      <div className="tc-landing__lens" aria-hidden="true">
-        <div className="tc-landing__ring-outer" />
-        <div className="tc-landing__ring-mid" />
-        <div className="tc-landing__ring-dashed" />
-        <div className="tc-landing__sweep" />
-        <div className="tc-landing__core">
-          <div className="tc-landing__pulse" />
-        </div>
+      {/* 应用图标 — 替代原先的透镜扫描动画 */}
+      <div className="tc-landing__icon" aria-hidden="true">
+        <AppLogo size={120} />
       </div>
 
       <div className="tc-landing__copy">
@@ -74,7 +66,7 @@ export default function ScanView() {
 
       <div className="tc-landing__actions">
         <div className="tc-landing__row">
-          {/* Disk picker — cycles volumes, opens a small menu. */}
+          {/* 磁盘选择器 — 循环切换卷，弹出小菜单 */}
           <div className="tc-landing__picker">
             <button
               type="button"
@@ -158,6 +150,9 @@ export default function ScanView() {
           {t("lens.landing.pickFolder")}
         </button>
       </div>
+
+      {/* 权限引导 — 权限不足时显示，引导用户前往系统设置授权 */}
+      <PermissionGuide compact />
     </div>
   );
 }

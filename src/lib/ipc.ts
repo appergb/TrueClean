@@ -6,20 +6,14 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type {
   AgentEvent,
-  AppInfo,
   AppSettings,
   ChatMessage,
   CleanReport,
-  DuplicateGroup,
-  FileEntry,
   HelperStatus,
-  JunkGroup,
   PermissionStatus,
   ScanOptions,
   ScanProgress,
   ScanResult,
-  StartupItem,
-  UninstallReport,
   VolumeInfo,
 } from "./types";
 
@@ -40,44 +34,21 @@ export const onScanProgress = (
 
 // ----- Cleanup -------------------------------------------------------------
 
-export const scanJunk = () => invoke<JunkGroup[]>("scan_junk");
-
-export const findLargeOldFiles = (
-  path: string,
-  minSizeBytes: number,
-  olderThanDays: number,
-) =>
-  invoke<FileEntry[]>("find_large_old_files", {
-    path,
-    minSizeBytes,
-    olderThanDays,
-  });
-
 export const cleanPaths = (paths: string[], toTrash: boolean) =>
   invoke<CleanReport>("clean_paths", { paths, toTrash });
 
-export const emptyTrash = () => invoke<CleanReport>("empty_trash");
-
-// ----- System extras -------------------------------------------------------
-
-export const findDuplicates = (path: string, minSizeBytes: number) =>
-  invoke<DuplicateGroup[]>("find_duplicates", { path, minSizeBytes });
-
-export const listApplications = () => invoke<AppInfo[]>("list_applications");
-
-export const uninstallApp = (appId: string, toTrash: boolean) =>
-  invoke<UninstallReport>("uninstall_app", { appId, toTrash });
-
-export const listStartupItems = () =>
-  invoke<StartupItem[]>("list_startup_items");
-
-export const setStartupItem = (id: string, enabled: boolean) =>
-  invoke<void>("set_startup_item", { id, enabled });
-
 // ----- Agent ---------------------------------------------------------------
 
-export const agentChat = (sessionId: string, messages: ChatMessage[]) =>
-  invoke<void>("agent_chat", { sessionId, messages });
+export const agentChat = (
+  sessionId: string,
+  messages: ChatMessage[],
+  scanTarget: string | null,
+) =>
+  invoke<void>("agent_chat", {
+    sessionId,
+    messages,
+    scanTarget: scanTarget ?? null,
+  });
 
 export const agentCancel = (sessionId: string) =>
   invoke<void>("agent_cancel", { sessionId });
@@ -97,6 +68,9 @@ export const openSystemPermissionSettings = (permissionType: string) =>
   invoke<void>("open_system_permission_settings", { permissionType });
 
 export const getHelperStatus = () => invoke<HelperStatus>("get_helper_status");
+
+export const installPrivilegedHelper = () =>
+  invoke<void>("install_privileged_helper");
 
 // ----- Settings ------------------------------------------------------------
 

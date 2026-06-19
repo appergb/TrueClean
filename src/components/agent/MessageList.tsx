@@ -177,6 +177,7 @@ export default function MessageList({
   events,
   isStreaming,
 }: MessageListProps) {
+  const { t } = useI18n();
   const endRef = useRef<HTMLDivElement>(null);
 
   // Group tool events by the assistant message index they attach to.
@@ -229,7 +230,7 @@ export default function MessageList({
             )}
             {streamingHere && empty && turnTools.length === 0 && (
               <div className="bubble bubble--assistant">
-                <span className="typing" aria-label="正在输入">
+                <span className="typing" aria-label={t("agent.typing")}>
                   <i />
                   <i />
                   <i />

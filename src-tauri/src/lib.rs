@@ -7,6 +7,7 @@ pub mod error;
 pub mod model;
 pub mod permissions;
 pub mod scanner;
+pub mod secrets;
 pub mod state;
 
 use state::AppState;
@@ -33,6 +34,7 @@ pub fn run() {
             commands::cleanup::find_large_old_files,
             commands::cleanup::clean_paths,
             commands::cleanup::empty_trash,
+            commands::cleanup::restore_last_clean,
             // system extras
             commands::system::find_duplicates,
             commands::system::list_applications,
@@ -50,6 +52,7 @@ pub fn run() {
             commands::permissions::get_permission_status,
             commands::permissions::open_system_permission_settings,
             commands::permissions::get_helper_status,
+            commands::permissions::install_privileged_helper,
         ])
         .run(tauri::generate_context!())
         .expect("error while running TrueClean");

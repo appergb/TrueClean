@@ -1,14 +1,15 @@
 // Space Lens — confirm modal. Shown when the user hits "查看并移除" in the
 // bottom bar. Lists every checked item with its category color and effective
-// size, then moves them to Trash on confirm.
+// size, then moves them to Trash (or deletes directly) on confirm.
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { useI18n } from "../../i18n";
 import { CAT_META, effSize, findByPath, fmtBytes } from "../../lib/lens-utils";
 import type { DirNode } from "../../lib/types";
 import { useCleanStore } from "../../store/cleanStore";
 import { useScanStore } from "../../store/scanStore";
+import { useSettingsStore } from "../../store/settingsStore";
 
 interface ConfirmItem {
   node: DirNode;
@@ -18,8 +19,10 @@ interface ConfirmItem {
 /**
  * Confirm modal — blur backdrop anchored to the stage area (not the window).
  * Clicking the backdrop cancels; clicking the card does nothing. Confirm
- * triggers `doClean(true)` which moves everything to Trash and surfaces a
- * toast with the freed bytes.
+ * triggers `doClean(defaultToTrash)` which moves everything to Trash (or
+ * deletes directly per user setting) and surfaces a toast with the freed bytes.
+ *
+ * 默认聚焦"取消"按钮，避免破坏性操作被 Enter 误触。
  */
 export function ConfirmModal() {
   const { t } = useI18n();
@@ -28,6 +31,54 @@ export function ConfirmModal() {
   const removed = useCleanStore((s) => s.removed);
   const closeConfirm = useCleanStore((s) => s.closeConfirm);
   const doClean = useCleanStore((s) => s.doClean);
+  const defaultToTrash = useSettingsStore((s) => s.settings?.defaultToTrash ?? true);
+
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  // Focus trap: 记录进入前的焦点，mount 时聚焦对话框，Tab 在对话框内循环，
+  // unmount 时把焦点还给原触发元素。
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    const focusables = () =>
+      Array.from(
+        overlay.querySelectorAll<HTMLElement>(
+          'button, a, input, textarea, select, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled"));
+
+    // 初始聚焦第一个可聚焦元素（取消按钮带 autoFocus，但显式调用更稳）。
+    const initial = focusables()[0];
+    initial?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || !overlay.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    overlay.addEventListener("keydown", onKeyDown);
+    return () => {
+      overlay.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, []);
 
   const items = useMemo<ConfirmItem[]>(() => {
     if (!tree) return [];
@@ -45,17 +96,25 @@ export function ConfirmModal() {
   );
 
   const handleConfirm = () => {
-    void doClean(true);
+    void doClean(defaultToTrash);
   };
 
   return (
     <div
+      ref={overlayRef}
       className="tc-confirm-overlay"
       role="dialog"
       aria-modal="true"
       aria-labelledby="tc-confirm-title"
+      aria-describedby="tc-confirm-desc"
       onClick={(e) => {
         if (e.target === e.currentTarget) closeConfirm();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeConfirm();
+        }
       }}
     >
       <div className="tc-confirm">
@@ -81,7 +140,7 @@ export function ConfirmModal() {
             <h3 id="tc-confirm-title" className="tc-confirm__title">
               {t("lens.confirm.title")}
             </h3>
-            <p className="tc-confirm__desc">
+            <p className="tc-confirm__desc" id="tc-confirm-desc">
               {t("lens.confirm.desc", { count: items.length })}
             </p>
           </div>
@@ -120,6 +179,7 @@ export function ConfirmModal() {
               type="button"
               className="tc-confirm__cancel"
               onClick={closeConfirm}
+              autoFocus
             >
               {t("lens.confirm.cancel")}
             </button>
@@ -127,7 +187,6 @@ export function ConfirmModal() {
               type="button"
               className="tc-confirm__confirm"
               onClick={handleConfirm}
-              autoFocus
             >
               {t("lens.confirm.confirm")}
             </button>

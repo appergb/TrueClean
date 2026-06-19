@@ -1,6 +1,9 @@
 // One tool invocation in the transcript: name + args summary + result summary,
 // collapsible, with highlights (key findings) shown prominently and raw JSON
 // available when expanded. Distinguishes running / done / failed / skipped.
+//
+// Claude 风格：运行中显示"正在调用 xxx…"文案 + 扫描光效动画，
+// 让用户清楚看到 agent 正在调用哪个工具。
 
 import { useState } from "react";
 
@@ -22,6 +25,8 @@ const TOOL_LABELS: Record<string, string> = {
   analyze_disk_health: "analyze_disk_health",
   clean_paths: "clean_paths",
   empty_trash: "empty_trash",
+  read_file: "read_file",
+  web_search: "web_search",
 };
 
 interface Highlight {
@@ -69,12 +74,12 @@ function prettyJson(value: unknown): string {
 }
 
 /** Compact one-line preview of an args/result blob for the collapsed header. */
-function summarize(value: unknown): string {
+function summarize(value: unknown, itemCountT: (count: number) => string): string {
   if (value == null) return "";
   if (typeof value === "string") {
     return value.length > 80 ? `${value.slice(0, 80)}…` : value;
   }
-  if (Array.isArray(value)) return `${value.length} 项`;
+  if (Array.isArray(value)) return itemCountT(value.length);
   if (typeof value === "object") {
     const keys = Object.keys(value as Record<string, unknown>);
     if (keys.length === 0) return "{}";
@@ -90,8 +95,11 @@ export default function ToolCallCard({ event }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   const state = resultState(event.result);
-  const argsSummary = summarize(event.args);
+  const argsSummary = summarize(event.args, (count) =>
+    t("agent.toolCall.itemCount", { count }),
+  );
   const highlights = extractHighlights(event.result);
+  const toolName = TOOL_LABELS[event.name] ?? event.name;
 
   const stateLabel =
     state === "pending"
@@ -110,6 +118,13 @@ export default function ToolCallCard({ event }: ToolCallCardProps) {
 
   return (
     <div className={`tool-card is-${state}`}>
+      {/* 运行中：扫描光效横条 */}
+      {state === "pending" && (
+        <div className="tool-card__scanline" aria-hidden="true">
+          <div className="tool-card__scanline-beam" />
+        </div>
+      )}
+
       <button
         type="button"
         className="tool-card__head"
@@ -117,13 +132,25 @@ export default function ToolCallCard({ event }: ToolCallCardProps) {
         aria-expanded={expanded}
       >
         <span className="tool-card__icon" aria-hidden="true">
-          {state === "pending" ? "•" : state === "error" ? "!" : state === "skipped" ? "⊘" : "✓"}
+          {state === "pending" ? (
+            <span className="tool-card__spinner" aria-hidden="true" />
+          ) : state === "error" ? (
+            "!"
+          ) : state === "skipped" ? (
+            "⊘"
+          ) : (
+            "✓"
+          )}
         </span>
         <span className="tool-card__title">
-          <span className="tool-card__name">
-            {TOOL_LABELS[event.name] ?? event.name}
-          </span>
-          {argsSummary && (
+          {state === "pending" ? (
+            <span className="tool-card__calling">
+              {t("agent.tool.calling", { name: toolName })}
+            </span>
+          ) : (
+            <span className="tool-card__name">{toolName}</span>
+          )}
+          {argsSummary && state !== "pending" && (
             <span className="tool-card__args mono">{argsSummary}</span>
           )}
         </span>

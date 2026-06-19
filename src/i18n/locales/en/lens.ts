@@ -11,6 +11,7 @@ export const lens = {
   // Top bar
   topbar: {
     diskOnline: "Disk online",
+    rescan: "Rescan",
   },
 
   // Landing stage
@@ -53,6 +54,8 @@ export const lens = {
     tooltipMtime: "Modified",
     tooltipHintDir: "Double-click to enter · Click to select",
     tooltipHintFile: "Single file · Click to select",
+    check: "Check",
+    uncheck: "Uncheck",
   },
 
   // Results stage — right (AI chat)
@@ -84,6 +87,24 @@ export const lens = {
   // Toast
   toast: {
     moved: "Moved to Trash, freed {size}",
+    partialFail: "Removed {removed} items, freed {size}; {failed} failed",
+    failed: "Clean failed: {error}",
+  },
+
+  // Error / cancel states
+  error: {
+    title: "Scan failed",
+    unknown: "Unknown error",
+    retry: "Back",
+  },
+  cancel: {
+    title: "Scan cancelled",
+    back: "Back",
+  },
+
+  // Accessibility
+  a11y: {
+    skipToContent: "Skip to content",
   },
 
   // Mtime labels

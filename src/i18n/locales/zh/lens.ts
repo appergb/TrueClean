@@ -10,6 +10,7 @@ export const lens = {
   // Top bar
   topbar: {
     diskOnline: "磁盘在线",
+    rescan: "重新扫描",
   },
 
   // Landing stage
@@ -52,6 +53,8 @@ export const lens = {
     tooltipMtime: "修改",
     tooltipHintDir: "双击进入 · 单击选中",
     tooltipHintFile: "单个文件 · 单击选中",
+    check: "勾选",
+    uncheck: "取消勾选",
   },
 
   // Results stage — right (AI chat)
@@ -83,6 +86,24 @@ export const lens = {
   // Toast
   toast: {
     moved: "已移至废纸篓，释放 {size}",
+    partialFail: "已移除 {removed} 项，释放 {size}；{failed} 项失败",
+    failed: "清理失败：{error}",
+  },
+
+  // Error / cancel states
+  error: {
+    title: "扫描失败",
+    unknown: "未知错误",
+    retry: "返回",
+  },
+  cancel: {
+    title: "扫描已取消",
+    back: "返回",
+  },
+
+  // Accessibility
+  a11y: {
+    skipToContent: "跳到主内容",
   },
 
   // Mtime labels

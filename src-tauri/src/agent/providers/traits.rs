@@ -49,35 +49,136 @@ pub enum ProviderDelta {
 /// the OpenAI and Ollama chat APIs. `system` messages are dropped here because
 /// those providers pass the system prompt as a dedicated leading message (added
 /// by the caller); `tool` results are mapped to the `tool` role.
+///
+/// P0-4: `role: "tool"` 消息必须携带 `tool_call_id`；`role: "assistant"` 消息
+/// 若发起工具调用，必须携带 `tool_calls` 数组（从 ChatMessage.tool_calls
+/// 反序列化得到）。OpenAI 多轮工具调用强依赖这两个字段。
+///
+/// P1-3: OpenAI/Ollama 中 `role: "assistant"` 消息若 content 为空且发起了
+/// 工具调用，应将 `content` 设为 `null` 而非空字符串，否则部分上游兼容层
+/// 会把空字符串当作文本内容处理。
 pub fn to_role_content(messages: &[ChatMessage]) -> Vec<Value> {
     messages
         .iter()
         .filter(|m| m.role != "system")
         .map(|m| {
             let role = normalize_role(&m.role);
-            serde_json::json!({ "role": role, "content": m.content })
+            let content = if m.content.is_empty() && m.tool_calls.is_some() {
+                Value::Null
+            } else {
+                Value::String(m.content.clone())
+            };
+            let mut obj = serde_json::json!({ "role": role, "content": content });
+            // OpenAI: tool 消息必须携带 tool_call_id
+            if m.role == "tool" {
+                if let Some(id) = &m.tool_call_id {
+                    obj["tool_call_id"] = Value::String(id.clone());
+                }
+            }
+            // OpenAI: assistant 消息若发起工具调用，必须携带 tool_calls 数组
+            if m.role == "assistant" {
+                if let Some(calls_json) = &m.tool_calls {
+                    if let Ok(calls) = serde_json::from_str::<Vec<Value>>(calls_json) {
+                        obj["tool_calls"] = Value::Array(calls);
+                    }
+                }
+            }
+            obj
         })
         .collect()
 }
 
 /// Convert messages into the Anthropic Messages API shape (system is passed
 /// separately, only `user` / `assistant` roles are allowed; `tool` results are
-/// folded into `user` turns as plain text since we serialize tool output into
-/// the message content upstream).
+/// folded into `user` turns as `tool_result` content blocks).
+///
+/// P0-4: Anthropic 要求 tool result 以 `tool_result` content block 形式
+/// 出现在 user 消息中，并携带 `tool_use_id`（对应 assistant 之前的 tool_use
+/// block 的 id）。这里将 `role: "tool"` 消息转为带 `tool_result` content
+/// block 的 user 消息。
+///
+/// P0 修复：当模型一轮发起多个工具调用时，runner 会 push N 条
+/// `role: "tool"` 消息。若每条独立转为一条 user 消息，会产生连续多条
+/// user 消息，违反 Anthropic 角色必须交替的要求并触发 400 错误。这里用
+/// 显式游标遍历，将连续的 tool 消息合并为单条 user 消息（含多个
+/// `tool_result` block）。
 pub fn to_anthropic_messages(messages: &[ChatMessage]) -> Vec<Value> {
-    messages
-        .iter()
-        .filter(|m| m.role != "system")
-        .map(|m| {
-            let role = match m.role.as_str() {
-                "assistant" => "assistant",
-                // Anthropic only accepts user/assistant; tool output is given
-                // back to the model as a user turn.
-                _ => "user",
-            };
-            serde_json::json!({ "role": role, "content": m.content })
-        })
-        .collect()
+    let mut out: Vec<Value> = Vec::new();
+    let filtered: Vec<&ChatMessage> = messages.iter().filter(|m| m.role != "system").collect();
+    let mut i = 0;
+
+    while i < filtered.len() {
+        let m = filtered[i];
+        match m.role.as_str() {
+            "tool" => {
+                // 收集连续的 tool 消息，合并为单条 user 消息，避免产生
+                // 连续多条 user 消息违反 Anthropic 角色交替要求。
+                let mut blocks: Vec<Value> = Vec::new();
+                while i < filtered.len() && filtered[i].role == "tool" {
+                    let t = filtered[i];
+                    let tool_use_id = t.tool_call_id.clone().unwrap_or_default();
+                    blocks.push(serde_json::json!({
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": t.content,
+                    }));
+                    i += 1;
+                }
+                out.push(serde_json::json!({ "role": "user", "content": blocks }));
+            }
+            "assistant" => {
+                let mut content: Vec<Value> = Vec::new();
+                if !m.content.is_empty() {
+                    content.push(serde_json::json!({
+                        "type": "text",
+                        "text": m.content,
+                    }));
+                }
+                // 解析 tool_calls 并转为 tool_use block
+                if let Some(calls_json) = &m.tool_calls {
+                    if let Ok(calls) = serde_json::from_str::<Vec<Value>>(calls_json) {
+                        for call in calls {
+                            let id = call.get("id").cloned().unwrap_or(Value::Null);
+                            let name = call
+                                .get("function")
+                                .and_then(|f| f.get("name"))
+                                .cloned()
+                                .unwrap_or(Value::Null);
+                            let args_str = call
+                                .get("function")
+                                .and_then(|f| f.get("arguments"))
+                                .and_then(Value::as_str)
+                                .unwrap_or("{}");
+                            let input: Value =
+                                serde_json::from_str(args_str).unwrap_or(serde_json::json!({}));
+                            content.push(serde_json::json!({
+                                "type": "tool_use",
+                                "id": id,
+                                "name": name,
+                                "input": input,
+                            }));
+                        }
+                    }
+                }
+                // 如果 content 为空（无文本无 tool_calls），添加空文本以满足
+                // Anthropic 对 assistant content 非空的要求。
+                if content.is_empty() {
+                    content.push(serde_json::json!({
+                        "type": "text",
+                        "text": "",
+                    }));
+                }
+                out.push(serde_json::json!({ "role": "assistant", "content": content }));
+                i += 1;
+            }
+            _ => {
+                out.push(serde_json::json!({ "role": "user", "content": m.content }));
+                i += 1;
+            }
+        }
+    }
+
+    out
 }
 
 fn normalize_role(role: &str) -> &str {
@@ -361,14 +462,20 @@ mod tests {
             ChatMessage {
                 role: "system".into(),
                 content: "sys".into(),
+                tool_call_id: None,
+                tool_calls: None,
             },
             ChatMessage {
                 role: "user".into(),
                 content: "hi".into(),
+                tool_call_id: None,
+                tool_calls: None,
             },
             ChatMessage {
                 role: "tool".into(),
                 content: "{}".into(),
+                tool_call_id: None,
+                tool_calls: None,
             },
         ];
         let out = to_role_content(&msgs);
@@ -383,15 +490,219 @@ mod tests {
             ChatMessage {
                 role: "assistant".into(),
                 content: "hello".into(),
+                tool_call_id: None,
+                tool_calls: None,
             },
             ChatMessage {
                 role: "tool".into(),
                 content: "{}".into(),
+                tool_call_id: None,
+                tool_calls: None,
             },
         ];
         let out = to_anthropic_messages(&msgs);
         assert_eq!(out.len(), 2);
         assert_eq!(out[0]["role"], "assistant");
         assert_eq!(out[1]["role"], "user");
+    }
+
+    /// P0-4: tool 消息在 OpenAI 格式下必须携带 tool_call_id。
+    #[test]
+    fn to_role_content_injects_tool_call_id_for_tool_messages() {
+        let msgs = vec![ChatMessage {
+            role: "tool".into(),
+            content: "result".into(),
+            tool_call_id: Some("call_abc".into()),
+            tool_calls: None,
+        }];
+        let out = to_role_content(&msgs);
+        assert_eq!(out[0]["tool_call_id"], "call_abc");
+    }
+
+    /// P0-4: assistant 消息在 OpenAI 格式下若发起工具调用，必须携带 tool_calls 数组。
+    #[test]
+    fn to_role_content_injects_tool_calls_for_assistant() {
+        let tool_calls_json = r#"[{"id":"call_1","type":"function","function":{"name":"scan_junk","arguments":"{}"}}]"#;
+        let msgs = vec![ChatMessage {
+            role: "assistant".into(),
+            content: "调用工具".into(),
+            tool_call_id: None,
+            tool_calls: Some(tool_calls_json.into()),
+        }];
+        let out = to_role_content(&msgs);
+        let calls = out[0]["tool_calls"].as_array().expect("应为数组");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0]["id"], "call_1");
+    }
+
+    /// P0-4: Anthropic 格式下 tool 消息应转为带 tool_result block 的 user 消息。
+    #[test]
+    fn to_anthropic_messages_emits_tool_result_block() {
+        let msgs = vec![ChatMessage {
+            role: "tool".into(),
+            content: "result".into(),
+            tool_call_id: Some("toolu_xyz".into()),
+            tool_calls: None,
+        }];
+        let out = to_anthropic_messages(&msgs);
+        assert_eq!(out[0]["role"], "user");
+        let content = out[0]["content"].as_array().expect("应为数组");
+        assert_eq!(content[0]["type"], "tool_result");
+        assert_eq!(content[0]["tool_use_id"], "toolu_xyz");
+    }
+
+    /// P0-4: Anthropic 格式下 assistant 消息应将 tool_calls 转为 tool_use block。
+    #[test]
+    fn to_anthropic_messages_emits_tool_use_block_for_assistant() {
+        let tool_calls_json = r#"[{"id":"toolu_1","type":"function","function":{"name":"scan_junk","arguments":"{\"path\":\"/tmp\"}"}}]"#;
+        let msgs = vec![ChatMessage {
+            role: "assistant".into(),
+            content: "调用工具".into(),
+            tool_call_id: None,
+            tool_calls: Some(tool_calls_json.into()),
+        }];
+        let out = to_anthropic_messages(&msgs);
+        let content = out[0]["content"].as_array().expect("应为数组");
+        // 第一个 block 是 text，第二个应是 tool_use
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[1]["type"], "tool_use");
+        assert_eq!(content[1]["id"], "toolu_1");
+        assert_eq!(content[1]["name"], "scan_junk");
+        assert_eq!(content[1]["input"]["path"], "/tmp");
+    }
+
+    /// P0 修复：模型一轮发起多个工具调用时，连续的 tool 消息必须合并为
+    /// 单条 user 消息（含多个 tool_result block），否则会产生连续多条
+    /// user 消息违反 Anthropic 角色交替要求。
+    #[test]
+    fn to_anthropic_messages_merges_consecutive_tool_messages() {
+        let tool_calls_json = r#"[{"id":"toolu_1","type":"function","function":{"name":"scan_junk","arguments":"{}"}},{"id":"toolu_2","type":"function","function":{"name":"clean","arguments":"{}"}}]"#;
+        let msgs = vec![
+            ChatMessage {
+                role: "user".into(),
+                content: "清理一下".into(),
+                tool_call_id: None,
+                tool_calls: None,
+            },
+            ChatMessage {
+                role: "assistant".into(),
+                content: "".into(),
+                tool_call_id: None,
+                tool_calls: Some(tool_calls_json.into()),
+            },
+            // 两条连续 tool 消息 —— 必须合并为一条 user 消息
+            ChatMessage {
+                role: "tool".into(),
+                content: "result-1".into(),
+                tool_call_id: Some("toolu_1".into()),
+                tool_calls: None,
+            },
+            ChatMessage {
+                role: "tool".into(),
+                content: "result-2".into(),
+                tool_call_id: Some("toolu_2".into()),
+                tool_calls: None,
+            },
+            ChatMessage {
+                role: "assistant".into(),
+                content: "完成".into(),
+                tool_call_id: None,
+                tool_calls: None,
+            },
+        ];
+        let out = to_anthropic_messages(&msgs);
+
+        // 期望序列：user, assistant, user(合并两条 tool), assistant
+        // —— 严格交替，无连续 user。
+        assert_eq!(out.len(), 4, "连续 tool 消息应合并为单条 user 消息");
+        assert_eq!(out[0]["role"], "user");
+        assert_eq!(out[1]["role"], "assistant");
+        assert_eq!(out[2]["role"], "user");
+        assert_eq!(out[3]["role"], "assistant");
+
+        // 合并后的 user 消息应含两个 tool_result block，顺序与输入一致。
+        let merged = out[2]["content"].as_array().expect("应为数组");
+        assert_eq!(merged.len(), 2, "应合并两个 tool_result block");
+        assert_eq!(merged[0]["type"], "tool_result");
+        assert_eq!(merged[0]["tool_use_id"], "toolu_1");
+        assert_eq!(merged[0]["content"], "result-1");
+        assert_eq!(merged[1]["type"], "tool_result");
+        assert_eq!(merged[1]["tool_use_id"], "toolu_2");
+        assert_eq!(merged[1]["content"], "result-2");
+
+        // 验证整条序列无连续相同角色（Anthropic 角色交替要求）。
+        let roles: Vec<&str> = out
+            .iter()
+            .map(|v| v["role"].as_str().expect("role 应为字符串"))
+            .collect();
+        for w in roles.windows(2) {
+            assert_ne!(w[0], w[1], "相邻消息角色不应相同：{:?}", roles);
+        }
+    }
+
+    /// P0 修复：单条 tool 消息仍应正确转为带单个 tool_result block 的 user 消息。
+    #[test]
+    fn to_anthropic_messages_single_tool_still_works() {
+        let msgs = vec![ChatMessage {
+            role: "tool".into(),
+            content: "only".into(),
+            tool_call_id: Some("toolu_solo".into()),
+            tool_calls: None,
+        }];
+        let out = to_anthropic_messages(&msgs);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0]["role"], "user");
+        let content = out[0]["content"].as_array().expect("应为数组");
+        assert_eq!(content.len(), 1);
+        assert_eq!(content[0]["type"], "tool_result");
+        assert_eq!(content[0]["tool_use_id"], "toolu_solo");
+    }
+
+    /// P0 修复：assistant 消息无文本且无 tool_calls 时，应输出空文本 block
+    /// 以满足 Anthropic 对 assistant content 非空的要求。
+    #[test]
+    fn to_anthropic_messages_empty_assistant_gets_empty_text_block() {
+        let msgs = vec![ChatMessage {
+            role: "assistant".into(),
+            content: "".into(),
+            tool_call_id: None,
+            tool_calls: None,
+        }];
+        let out = to_anthropic_messages(&msgs);
+        let content = out[0]["content"].as_array().expect("应为数组");
+        assert_eq!(content.len(), 1);
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[0]["text"], "");
+    }
+
+    /// P1-3: OpenAI/Ollama 中 assistant 消息 content 为空且有 tool_calls 时，
+    /// content 应为 null 而非空字符串。
+    #[test]
+    fn to_role_content_null_content_for_assistant_with_tool_calls() {
+        let tool_calls_json = r#"[{"id":"call_1","type":"function","function":{"name":"scan_junk","arguments":"{}"}}]"#;
+        let msgs = vec![ChatMessage {
+            role: "assistant".into(),
+            content: "".into(),
+            tool_call_id: None,
+            tool_calls: Some(tool_calls_json.into()),
+        }];
+        let out = to_role_content(&msgs);
+        assert_eq!(out[0]["role"], "assistant");
+        assert!(out[0]["content"].is_null(), "空 content + tool_calls 应为 null");
+        assert_eq!(out[0]["tool_calls"][0]["id"], "call_1");
+    }
+
+    /// P1-3: assistant 消息有文本内容时，content 仍应为字符串（不受影响）。
+    #[test]
+    fn to_role_content_keeps_string_content_when_nonempty() {
+        let msgs = vec![ChatMessage {
+            role: "assistant".into(),
+            content: "hello".into(),
+            tool_call_id: None,
+            tool_calls: None,
+        }];
+        let out = to_role_content(&msgs);
+        assert_eq!(out[0]["content"], "hello");
     }
 }

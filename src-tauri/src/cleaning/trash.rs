@@ -638,4 +638,44 @@ mod tests {
         assert_eq!(loaded.entries[0].original_path, "/tmp/x");
         let _ = fs::remove_dir_all(&work);
     }
+    /// P0: empty_trash 应统计被释放的字节数与删除条目数。
+    ///
+    /// `#[ignore]` 因为 `empty_trash()` 通过 `crate::cleaning::paths::trash_dirs()`
+    /// 获取平台回收站目录（macOS 上是 `~/.Trash`），该函数使用
+    /// `dirs::home_dir()` 且**不支持环境变量重定向**。直接运行会清空
+    /// 当前用户真实的回收站，存在数据安全风险。
+    ///
+    /// 手动运行步骤：
+    /// 1. 在 `~/.Trash` 中放入若干测试文件（可使用 `mkfile` 或 `dd` 生成）。
+    /// 2. 执行 `cargo test --lib -- --ignored empty_trash_counts_freed_bytes`。
+    /// 3. 验证 `removed_count` 与 `freed_bytes` 符合预期。
+    #[test]
+    #[ignore = "会清空真实 ~/.Trash，需手动运行并确认"]
+    fn empty_trash_counts_freed_bytes() {
+        // 准备阶段：向真实回收站放入两个已知大小的文件。
+        let trash_dir = dirs::home_dir().expect("无法定位 HOME 目录").join(".Trash");
+        std::fs::create_dir_all(&trash_dir).ok();
+
+        let name1 = format!("tc_empty_trash_{}.bin", uuid::Uuid::new_v4());
+        let name2 = format!("tc_empty_trash_{}.bin", uuid::Uuid::new_v4());
+        let p1 = trash_dir.join(&name1);
+        let p2 = trash_dir.join(&name2);
+        std::fs::write(&p1, vec![0u8; 100]).unwrap();
+        std::fs::write(&p2, vec![0u8; 200]).unwrap();
+
+        let report = empty_trash().unwrap();
+
+        // 验证：至少删除了我们刚放入的两个文件，且释放字节数 >= 300。
+        assert!(
+            report.removed_count >= 2,
+            "removed_count 应 >= 2，实际: {}",
+            report.removed_count
+        );
+        assert!(
+            report.freed_bytes >= 300,
+            "freed_bytes 应 >= 300，实际: {}",
+            report.freed_bytes
+        );
+        assert!(!p1.exists() && !p2.exists(), "测试文件应已被删除");
+    }
 }
