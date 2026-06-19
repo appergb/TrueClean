@@ -239,7 +239,7 @@ pub(crate) fn walk<'a>(root: &Path, ctx: &ScanCtx<'a>) -> AppResult<RawNode> {
 /// 仅在扫描根为 `/` 或 `/System/Volumes/Data` 时触发这些排除规则，
 /// 避免影响用户对特定子目录的扫描。
 fn should_skip_subdir(path: &Path, scan_root: &Path) -> bool {
-    let path_str = path.to_string_lossy();
+    let _path_str = path.to_string_lossy();
     let root_str = scan_root.to_string_lossy();
 
     // 仅当扫描根是 / 或 /System/Volumes/Data 时才应用排除规则。
@@ -253,15 +253,15 @@ fn should_skip_subdir(path: &Path, scan_root: &Path) -> bool {
     // Data 卷的内容已通过 firmlink 出现在 / 下；辅助卷不是用户数据。
     #[cfg(target_os = "macos")]
     {
-        if path_str.starts_with("/System/Volumes/") {
+        if _path_str.starts_with("/System/Volumes/") {
             return true;
         }
         // 虚拟文件系统。
-        if path_str == "/dev" || path_str.starts_with("/dev/") {
+        if _path_str == "/dev" || _path_str.starts_with("/dev/") {
             return true;
         }
         // 交换文件目录。
-        if path_str == "/private/var/vm" || path_str.starts_with("/private/var/vm/") {
+        if _path_str == "/private/var/vm" || _path_str.starts_with("/private/var/vm/") {
             return true;
         }
     }

@@ -98,7 +98,7 @@ pub fn find_duplicates(root: &Path, min_size: u64) -> AppResult<Vec<DuplicateGro
         })
         .collect();
 
-    result.sort_by(|a, b| b.wasted_bytes.cmp(&a.wasted_bytes));
+    result.sort_by_key(|a| std::cmp::Reverse(a.wasted_bytes));
     Ok(result)
 }
 

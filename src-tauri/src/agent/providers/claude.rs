@@ -71,6 +71,7 @@ pub async fn stream_chat(
 
 /// 与 `stream_chat` 相同，但允许调用方传入自定义 `base_url`（用于 Claude 兼容
 /// 的第三方代理或自托管网关）。`base_url` 末尾的斜杠会被去掉。
+#[allow(clippy::too_many_arguments)]
 pub async fn stream_chat_with_base(
     http: &reqwest::Client,
     api_key: &str,

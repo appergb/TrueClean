@@ -14,6 +14,7 @@ use crate::model::ChatMessage;
 ///
 /// DeepSeek 完全兼容 OpenAI API 格式，直接委托给
 /// [`openai::stream_chat_with_base`]，传入自定义 `base_url`。
+#[allow(clippy::too_many_arguments)]
 pub async fn stream_chat(
     http: &reqwest::Client,
     api_key: &str,

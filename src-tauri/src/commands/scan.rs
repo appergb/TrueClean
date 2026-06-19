@@ -26,12 +26,12 @@ fn is_user_volume(mount_point: &std::path::Path, total_bytes: u64) -> bool {
         return false;
     }
 
-    let mp_str = mount_point.to_string_lossy();
+    let _mp_str = mount_point.to_string_lossy();
 
     // 2. macOS APFS 辅助卷：/System/Volumes/{Preboot,Recovery,VM,Update,Hardware}
     #[cfg(target_os = "macos")]
     {
-        if let Some(rest) = mp_str.strip_prefix("/System/Volumes/") {
+        if let Some(rest) = _mp_str.strip_prefix("/System/Volumes/") {
             let helper_names = ["Preboot", "Recovery", "VM", "Update", "Hardware"];
             let top = rest.split('/').next().unwrap_or("");
             if helper_names.contains(&top) {
@@ -53,7 +53,7 @@ fn is_user_volume(mount_point: &std::path::Path, total_bytes: u64) -> bool {
         ];
         if VIRTUAL_PREFIXES
             .iter()
-            .any(|p| mp_str == *p || mp_str.starts_with(&format!("{p}/")))
+            .any(|p| _mp_str == *p || _mp_str.starts_with(&format!("{p}/")))
         {
             return false;
         }

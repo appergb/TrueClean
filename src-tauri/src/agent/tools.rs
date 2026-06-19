@@ -401,7 +401,7 @@ fn scan_junk() -> AppResult<Value> {
     // Highlights: top findings by size × safety.
     let mut sorted: Vec<&crate::model::JunkGroup> =
         groups.iter().filter(|g| g.total_bytes > 0).collect();
-    sorted.sort_by(|a, b| b.total_bytes.cmp(&a.total_bytes));
+    sorted.sort_by_key(|a| std::cmp::Reverse(a.total_bytes));
     let highlights: Vec<Value> = sorted
         .iter()
         .take(3)
@@ -488,7 +488,7 @@ fn find_duplicates(args: &Value) -> AppResult<Value> {
     // Highlights: top 3 groups by wasted bytes (most reclaimable first).
     let mut sorted: Vec<&crate::model::DuplicateGroup> =
         groups.iter().filter(|g| g.wasted_bytes > 0).collect();
-    sorted.sort_by(|a, b| b.wasted_bytes.cmp(&a.wasted_bytes));
+    sorted.sort_by_key(|a| std::cmp::Reverse(a.wasted_bytes));
     let highlights: Vec<Value> = sorted
         .iter()
         .take(3)
@@ -543,7 +543,7 @@ fn list_applications() -> AppResult<Value> {
     // Highlights: top 3 largest apps as key findings.
     let mut sorted: Vec<&crate::model::AppInfo> =
         apps.iter().filter(|a| a.size_bytes > 0).collect();
-    sorted.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    sorted.sort_by_key(|a| std::cmp::Reverse(a.size_bytes));
     let highlights: Vec<Value> = sorted
         .iter()
         .take(3)

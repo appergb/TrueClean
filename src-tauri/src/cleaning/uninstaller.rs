@@ -39,7 +39,7 @@ pub fn list_applications() -> AppResult<Vec<AppInfo>> {
         }
     }
     // Largest first — most actionable for reclaiming space.
-    apps.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    apps.sort_by_key(|a| std::cmp::Reverse(a.size_bytes));
     Ok(apps)
 }
 
@@ -240,10 +240,10 @@ fn parse_desktop_field(path: &Path, key: &str) -> Option<String> {
 /// Locate related caches / preferences / support files for an app.
 /// Each platform scans its standard per-app data locations, matching either
 /// the bundle id (preferred) or the app name.
-fn find_leftovers(name: &str, bundle_id: Option<&str>) -> Vec<PathBuf> {
+fn find_leftovers(name: &str, _bundle_id: Option<&str>) -> Vec<PathBuf> {
     #[cfg(target_os = "macos")]
     {
-        find_leftovers_macos(name, bundle_id)
+        find_leftovers_macos(name, _bundle_id)
     }
     #[cfg(target_os = "linux")]
     {
@@ -256,7 +256,7 @@ fn find_leftovers(name: &str, bundle_id: Option<&str>) -> Vec<PathBuf> {
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
         let _ = name;
-        let _ = bundle_id;
+        let _ = _bundle_id;
         Vec::new()
     }
 }

@@ -83,7 +83,7 @@ pub fn find_large_old(
         });
     }
 
-    results.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    results.sort_by_key(|a| std::cmp::Reverse(a.size_bytes));
     results.truncate(MAX_RESULTS);
     Ok(results)
 }

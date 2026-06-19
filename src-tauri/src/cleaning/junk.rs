@@ -189,7 +189,7 @@ fn collect_items(spec: &GroupSpec, cancel: &AtomicBool) -> Vec<JunkItem> {
         .collect();
 
     sized.retain(|(_, s)| *s > 0);
-    sized.sort_by(|a, b| b.1.cmp(&a.1));
+    sized.sort_by_key(|x| std::cmp::Reverse(x.1));
     sized
         .into_iter()
         .map(|(p, s)| JunkItem {

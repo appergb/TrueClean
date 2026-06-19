@@ -20,7 +20,7 @@ pub(crate) fn build_dir_node(raw: RawNode, options: &ScanOptions) -> DirNode {
     } = raw;
 
     // Sort largest-first so truncation always drops the smallest branches.
-    children.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    children.sort_by_key(|a| std::cmp::Reverse(a.size_bytes));
 
     let top = options.top_children;
     let truncated_children = children.len().saturating_sub(top) as u32;
@@ -68,7 +68,7 @@ pub(crate) fn build_breakdown(totals: &[(u64, u64); CATEGORY_COUNT]) -> Category
         })
         .collect();
 
-    entries.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    entries.sort_by_key(|a| std::cmp::Reverse(a.size_bytes));
 
     CategoryBreakdown {
         entries,
