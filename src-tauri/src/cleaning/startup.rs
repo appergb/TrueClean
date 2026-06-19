@@ -435,11 +435,11 @@ mod tests {
         fs::write(&file, "[Desktop Entry]\nType=Application\nName=Test\n").unwrap();
 
         // Disable: Hidden=true should be added.
-        set_startup_item(&file.display().to_string().as_str(), false).unwrap();
+        set_startup_item(&file.display().to_string(), false).unwrap();
         assert!(desktop_is_hidden(&file), "should be hidden after disable");
 
         // Enable: Hidden=false.
-        set_startup_item(&file.display().to_string().as_str(), true).unwrap();
+        set_startup_item(&file.display().to_string(), true).unwrap();
         assert!(
             !desktop_is_hidden(&file),
             "should not be hidden after enable"
