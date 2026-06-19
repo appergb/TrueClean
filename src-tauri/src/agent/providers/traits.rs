@@ -689,7 +689,10 @@ mod tests {
         }];
         let out = to_role_content(&msgs);
         assert_eq!(out[0]["role"], "assistant");
-        assert!(out[0]["content"].is_null(), "空 content + tool_calls 应为 null");
+        assert!(
+            out[0]["content"].is_null(),
+            "空 content + tool_calls 应为 null"
+        );
         assert_eq!(out[0]["tool_calls"][0]["id"], "call_1");
     }
 

@@ -62,7 +62,17 @@ pub async fn stream_chat(
     on_delta: &mut (dyn FnMut(ProviderDelta) + Send),
 ) -> AppResult<String> {
     // 向后兼容：使用默认 base_url 委托给 stream_chat_with_base。
-    stream_chat_with_base(http, api_key, DEFAULT_BASE, model, system, messages, tools, on_delta).await
+    stream_chat_with_base(
+        http,
+        api_key,
+        DEFAULT_BASE,
+        model,
+        system,
+        messages,
+        tools,
+        on_delta,
+    )
+    .await
 }
 
 /// 与 `stream_chat` 相同，但允许调用方传入自定义 `base_url`（用于 OpenAI 兼容

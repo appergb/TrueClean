@@ -117,10 +117,7 @@ impl<'a> ScanCtx<'a> {
         // One lock: update totals, then decide whether to emit. Emitting
         // outside the lock keeps a slow `on_progress` from blocking peers.
         let should_emit = {
-            let mut st = self
-                .state
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
             let slot = &mut st.totals[category_index(category)];
             slot.0 += size;
             slot.1 += 1;
@@ -140,17 +137,11 @@ impl<'a> ScanCtx<'a> {
     }
 
     fn record_skip(&self) {
-        self.state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .skipped += 1;
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).skipped += 1;
     }
 
     fn record_error(&self) {
-        self.state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .errors += 1;
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).errors += 1;
     }
 
     /// 记录一次权限拒绝错误。与 [`record_error`] 分开统计，便于前端区分
@@ -176,10 +167,7 @@ impl<'a> ScanCtx<'a> {
     /// Snapshot the category totals and skip/error counters. Locks once and
     /// copies (arrays are `Copy`); safe to call after the walk finishes.
     pub(crate) fn snapshot(&self) -> ([(u64, u64); CATEGORY_COUNT], ScanStats) {
-        let st = self
-            .state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let st = self.state.lock().unwrap_or_else(|e| e.into_inner());
         (
             st.totals,
             ScanStats {
@@ -805,18 +793,12 @@ mod tests {
         ));
 
         // 正常路径不应被跳过。
-        assert!(!should_skip_subdir(
-            Path::new("/Users"),
-            Path::new("/")
-        ));
+        assert!(!should_skip_subdir(Path::new("/Users"), Path::new("/")));
         assert!(!should_skip_subdir(
             Path::new("/Applications"),
             Path::new("/")
         ));
-        assert!(!should_skip_subdir(
-            Path::new("/Library"),
-            Path::new("/")
-        ));
+        assert!(!should_skip_subdir(Path::new("/Library"), Path::new("/")));
 
         // 扫描根不是 / 时，不应用排除规则。
         assert!(!should_skip_subdir(

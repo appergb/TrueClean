@@ -760,9 +760,8 @@ fn read_file(args: &Value) -> AppResult<Value> {
         )));
     }
 
-    let metadata = std::fs::metadata(&path).map_err(|e| {
-        AppError::Agent(format!("无法读取文件 {}: {}", path.display(), e))
-    })?;
+    let metadata = std::fs::metadata(&path)
+        .map_err(|e| AppError::Agent(format!("无法读取文件 {}: {}", path.display(), e)))?;
 
     if !metadata.is_file() {
         return Err(AppError::Agent(format!(
@@ -783,9 +782,8 @@ fn read_file(args: &Value) -> AppResult<Value> {
         }));
     }
 
-    let content = std::fs::read_to_string(&path).map_err(|e| {
-        AppError::Agent(format!("读取文件失败 {}: {}", path.display(), e))
-    })?;
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| AppError::Agent(format!("读取文件失败 {}: {}", path.display(), e)))?;
 
     let total_chars = content.chars().count();
     let (truncated, returned_content) = if total_chars > max_chars {
@@ -908,7 +906,9 @@ fn parse_ddg_results(html: &str, max: usize) -> Vec<Value> {
                 continue;
             }
         };
-        let title = strip_html_tags(&html[text_start..text_end]).trim().to_string();
+        let title = strip_html_tags(&html[text_start..text_end])
+            .trim()
+            .to_string();
 
         // 提取摘要
         let snippet = html[text_end..]
@@ -917,9 +917,11 @@ fn parse_ddg_results(html: &str, max: usize) -> Vec<Value> {
                 let s_start = text_end + idx + snippet_marker.len();
                 html[s_start..].find('>').and_then(|gt| {
                     let content_start = s_start + gt + 1;
-                    html[content_start..]
-                        .find("</a>")
-                        .map(|et| strip_html_tags(&html[content_start..content_start + et]).trim().to_string())
+                    html[content_start..].find("</a>").map(|et| {
+                        strip_html_tags(&html[content_start..content_start + et])
+                            .trim()
+                            .to_string()
+                    })
                 })
             })
             .unwrap_or_default();

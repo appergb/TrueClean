@@ -296,7 +296,8 @@ mod tests {
     #[test]
     fn test_truncate_preserves_tool_call_pairing() {
         // assistant with tool_calls + tool result 必须一起保留
-        let tool_calls = r#"[{"id":"call_1","type":"function","function":{"name":"scan","arguments":"{}"}}]"#;
+        let tool_calls =
+            r#"[{"id":"call_1","type":"function","function":{"name":"scan","arguments":"{}"}}]"#;
         let msgs = vec![
             make_msg("user", "old question"),
             make_assistant_with_tools("let me scan", tool_calls),
@@ -312,7 +313,8 @@ mod tests {
     #[test]
     fn test_truncate_drops_tool_pair_together() {
         // budget 很小，assistant+tool_calls 和 tool result 应一起被丢弃
-        let tool_calls = r#"[{"id":"call_1","type":"function","function":{"name":"scan","arguments":"{}"}}]"#;
+        let tool_calls =
+            r#"[{"id":"call_1","type":"function","function":{"name":"scan","arguments":"{}"}}]"#;
         let long_content = "x".repeat(500);
         let msgs = vec![
             make_assistant_with_tools(&long_content, tool_calls),
@@ -328,7 +330,8 @@ mod tests {
     #[test]
     fn test_truncate_tool_result_gets_truncated_not_dropped() {
         // 超长 tool result 应被截断而非丢弃（如果其配对的 assistant 被保留）
-        let tool_calls = r#"[{"id":"call_1","type":"function","function":{"name":"scan","arguments":"{}"}}]"#;
+        let tool_calls =
+            r#"[{"id":"call_1","type":"function","function":{"name":"scan","arguments":"{}"}}]"#;
         let long_tool_content = "x".repeat(5000);
         let msgs = vec![
             make_assistant_with_tools("scanning", tool_calls),

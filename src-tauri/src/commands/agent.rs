@@ -30,7 +30,15 @@ pub async fn agent_chat(
         .clone();
     let cancel = state.new_cancel(&session_id);
 
-    let result = runner::run_chat(session_id.clone(), messages, settings, scan_target, app, cancel).await;
+    let result = runner::run_chat(
+        session_id.clone(),
+        messages,
+        settings,
+        scan_target,
+        app,
+        cancel,
+    )
+    .await;
 
     state.clear_cancel(&session_id);
     result

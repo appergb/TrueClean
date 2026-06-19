@@ -386,7 +386,11 @@ fn build_review_prompt(call: &CollectedCall, scan_target: Option<&str>) -> (Stri
         .get("toTrash")
         .and_then(Value::as_bool)
         .unwrap_or(true);
-    let mode = if to_trash { "移入回收站" } else { "永久删除" };
+    let mode = if to_trash {
+        "移入回收站"
+    } else {
+        "永久删除"
+    };
     let workdir = scan_target.unwrap_or("/");
     let path_list = paths
         .iter()

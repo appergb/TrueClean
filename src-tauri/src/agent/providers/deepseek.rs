@@ -24,6 +24,8 @@ pub async fn stream_chat(
     tools: &[serde_json::Value],
     on_delta: &mut (dyn FnMut(ProviderDelta) + Send),
 ) -> AppResult<String> {
-    openai::stream_chat_with_base(http, api_key, base_url, model, system, messages, tools, on_delta)
-        .await
+    openai::stream_chat_with_base(
+        http, api_key, base_url, model, system, messages, tools, on_delta,
+    )
+    .await
 }

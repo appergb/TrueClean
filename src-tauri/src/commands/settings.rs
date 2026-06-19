@@ -40,8 +40,11 @@ pub fn load_into_state(app: &AppHandle) {
         if !settings.claude_api_key.is_empty() {
             if crate::secrets::load_key(crate::secrets::CLAUDE_ACCOUNT).is_none() {
                 // keyring 中没有，从 settings.json 迁移过去
-                if crate::secrets::store_key(crate::secrets::CLAUDE_ACCOUNT, &settings.claude_api_key)
-                    .is_ok()
+                if crate::secrets::store_key(
+                    crate::secrets::CLAUDE_ACCOUNT,
+                    &settings.claude_api_key,
+                )
+                .is_ok()
                 {
                     settings.claude_api_key = String::new();
                     needs_rewrite = true;
@@ -56,8 +59,11 @@ pub fn load_into_state(app: &AppHandle) {
         // OpenAI key 迁移（同上逻辑）
         if !settings.openai_api_key.is_empty() {
             if crate::secrets::load_key(crate::secrets::OPENAI_ACCOUNT).is_none() {
-                if crate::secrets::store_key(crate::secrets::OPENAI_ACCOUNT, &settings.openai_api_key)
-                    .is_ok()
+                if crate::secrets::store_key(
+                    crate::secrets::OPENAI_ACCOUNT,
+                    &settings.openai_api_key,
+                )
+                .is_ok()
                 {
                     settings.openai_api_key = String::new();
                     needs_rewrite = true;
@@ -71,8 +77,11 @@ pub fn load_into_state(app: &AppHandle) {
         // DeepSeek key 迁移（同上逻辑）
         if !settings.deepseek_api_key.is_empty() {
             if crate::secrets::load_key(crate::secrets::DEEPSEEK_ACCOUNT).is_none() {
-                if crate::secrets::store_key(crate::secrets::DEEPSEEK_ACCOUNT, &settings.deepseek_api_key)
-                    .is_ok()
+                if crate::secrets::store_key(
+                    crate::secrets::DEEPSEEK_ACCOUNT,
+                    &settings.deepseek_api_key,
+                )
+                .is_ok()
                 {
                     settings.deepseek_api_key = String::new();
                     needs_rewrite = true;
@@ -176,7 +185,10 @@ pub fn save_settings(settings: AppSettings, state: State<AppState>) -> AppResult
         }
         // DeepSeek（同上逻辑）
         if !settings.deepseek_api_key.is_empty() && settings.deepseek_api_key != "********" {
-            crate::secrets::store_key(crate::secrets::DEEPSEEK_ACCOUNT, &settings.deepseek_api_key)?;
+            crate::secrets::store_key(
+                crate::secrets::DEEPSEEK_ACCOUNT,
+                &settings.deepseek_api_key,
+            )?;
             settings.deepseek_api_key = String::new();
         } else if settings.deepseek_api_key == "********" {
             settings.deepseek_api_key = String::new();
