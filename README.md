@@ -1,215 +1,429 @@
 <div align="center">
 
-#  TrueClean
+# TrueClean
 
-**跨平台磁盘清理 + AI Agent 桌面应用 · Cross-platform disk cleaner with a built-in AI agent**
+**Cross-platform disk cleaner with a built-in AI agent**
 
-类 CleanMyMac：扫描磁盘占用 → 可视化分类占比 → 识别系统/缓存数据 → 让 AI 助手分析并（在你确认后）安全清理。
+跨平台磁盘清理 + AI Agent 桌面应用 · Tauri 2 + React 18 + Rust
 
-![status](https://img.shields.io/badge/status-可立项基线-blue) ![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue) ![stack](https://img.shields.io/badge/stack-Tauri%202%20%2B%20React%2018-informational) ![license](https://img.shields.io/badge/license-MIT-green) ![rust](https://img.shields.io/badge/rust-stable-orange)
+</div>
+
+> **中文文档**：本 README 以英文为主。完整中文文档请点击 → [简体中文](./README.zh-CN.md)
+>
+> **English**: The main body of this README is in English. A full Chinese translation is available via the link above.
+
+---
+
+<div align="center">
+
+![status](https://img.shields.io/badge/status-active--development-blue)
+![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
+![stack](https://img.shields.io/badge/stack-Tauri%202%20%2B%20React%2018%20%2B%20Rust-informational)
+![license](https://img.shields.io/badge/license-MIT-green)
+![rust](https://img.shields.io/badge/rust-stable%20%E2%89%A5%201.77-orange)
 
 </div>
 
 ---
 
-##  这是什么
+## Table of Contents
 
-TrueClean 想解决一个常见痛点：**硬盘满了，但你不知道空间被什么吃掉了，也不敢乱删。**
-
-它做三件事：
-
-1. **看清楚** —— 扫描整块硬盘或某个目录，把占用按类别（系统 / 应用 / 开发文件 / 媒体 / 缓存 / 日志 / 文档 / 下载 / 压缩包等）拆开，用矩形树图和旭日图直观展示，还能逐层下钻到具体文件夹。
-2. **清得安全** —— 自动识别真正的「垃圾」（各类缓存、日志、临时文件、浏览器缓存、开发缓存、回收站），区分「绝对安全可删」和「需你确认」，删除默认进回收站，支持一键撤销。
-3. **让 AI 帮你判断** —— 内置一个 AI 助手面板。它能**真正调用上面的扫描/分析能力**（不是空谈），帮你看「哪些能安全清理、哪些是缓存、哪些大文件可以归档」，给出预计释放空间和风险等级，并在你确认后执行清理。
-
->  完整产品定义见 [docs/PRD.md](docs/PRD.md)，系统架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Why TrueClean](#why-trueclean)
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+- [Configuration](#configuration)
+- [Security Model](#security-model)
+- [AI Agent](#ai-agent)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Testing](#testing)
+- [Building](#building)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## ✨ 功能一览
+## Overview
 
-| 功能 | 说明 | 状态 |
+**TrueClean** is a cross-platform desktop application that helps you reclaim disk space safely. It scans your disk, visualizes what is consuming storage, identifies genuine junk and system data, and lets an AI agent analyze and perform cleanups — always with your explicit confirmation.
+
+It solves a common pain point: **your disk is full, but you don't know what is consuming the space, and you are afraid to delete the wrong thing.**
+
+TrueClean does three things:
+
+1. **See clearly** — Scan an entire disk or a specific directory, break down usage by category (system, applications, development files, media, caches, logs, documents, downloads, archives, etc.), and visualize it with treemaps and sunburst charts with drill-down to individual folders.
+2. **Clean safely** — Automatically identify genuine junk (caches, logs, temporary files, browser caches, development caches, trash), distinguish between "absolutely safe to delete" and "needs your confirmation", send deletions to the trash by default, and support one-click undo.
+3. **Let AI help you decide** — A built-in AI assistant panel can actually invoke the scanning and analysis capabilities above (not just talk). It tells you what can be safely cleaned, what is cache, which large files can be archived, gives estimated space savings and risk levels, and executes cleanup only after you confirm.
+
+> Full product definition: [docs/PRD.md](docs/PRD.md) · System architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+---
+
+## Key Features
+
+| Feature | Description | Status |
 |---|---|---|
-|  **概览** | 磁盘卷使用率环形图、容量统计、快速入口 | ✅ |
-|  **磁盘扫描与可视化** | 并行递归扫描、11 类分类、Treemap + Sunburst + 文件树下钻、实时进度可取消 | ✅ |
-|  **系统垃圾清理** | 9 组垃圾（缓存/日志/临时/浏览器/开发/语言缓存/回收站），组级勾选、预计释放汇总 | ✅ |
-|  **大文件查找** | 按最小大小 + 未修改天数筛选大且旧的文件 | ✅ |
-|  **重复文件去重** | blake3 内容哈希精确去重，按组保留 1 删其余 | ✅ |
-|  **应用卸载** | 列出应用 + 连带清理残留（缓存/偏好/Support） | ✅ 基线 |
-| ⚡ **启动项管理** | 列出/启停登录项、LaunchAgent | ✅ 基线 |
-|  **AI 助手** | 多 Provider（Claude/OpenAI/Ollama）+ 9 工具 + 流式 + 工具调用可视化 | ✅ 基线 |
-|  **安全撤销** | 默认进回收站 + `CleanManifest` 快照 + `restore_last` 一键还原 | ✅ |
-|  **保护路径** | `is_protected` 硬编码红线，绝不删系统关键路径 | ✅ |
+| **Overview** | Disk volume usage ring chart, capacity statistics, quick entry points | ✅ |
+| **Disk Scan & Visualization** | Parallel recursive scanning, 11 categories, Treemap + Sunburst + file tree drill-down, real-time cancellable progress | ✅ |
+| **System Junk Cleanup** | 9 junk groups (cache/log/temp/browser/dev/language cache/trash), group-level selection, estimated savings summary | ✅ |
+| **Large File Finder** | Filter large and old files by minimum size + days unmodified | ✅ |
+| **Duplicate File Dedup** | blake3 content-hash exact deduplication, keep 1 per group | ✅ |
+| **App Uninstaller** | List apps + clean residuals (cache/preferences/Support) | ✅ baseline |
+| **Startup Item Manager** | List/enable/disable login items and LaunchAgents | ✅ baseline |
+| **AI Assistant** | Multi-provider (Claude/OpenAI/Ollama/DeepSeek) + 9 tools + streaming + tool-call visualization | ✅ baseline |
+| **Safe Undo** | Default to trash + `CleanManifest` snapshot + `restore_last` one-click restore | ✅ |
+| **Protected Paths** | `is_protected` hardcoded red line, never deletes critical system paths | ✅ |
+| **Secure Key Storage** | API keys stored in OS keychain (macOS Keychain / Windows Credential Manager / Linux Secret Service) | ✅ |
+| **First-launch Permission Gate** | Full-screen permission check on first launch, blocks usage until all permissions granted | ✅ |
+| **Bilingual UI** | Chinese / English switching synced with AppSettings | ✅ |
+| **Dark Mode** | Theme switching in settings | ✅ |
 
-> 完成度与路线图详见 [docs/ROADMAP.md](docs/ROADMAP.md)。
-
-<!-- 截图占位：发布后替换为真实截图 -->
-<!--
-![概览](docs/screenshots/overview.png)
-![扫描可视化](docs/screenshots/scan.png)
-![AI 助手](docs/screenshots/agent.png)
--->
+> Completion status and roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
 
 ---
 
-##  架构一图
+## Why TrueClean
+
+Most disk cleaners fall into two camps:
+
+- **Aggressive cleaners** that delete first and ask later — risky for system stability.
+- **Cautious viewers** that show you the mess but leave you to clean it up manually.
+
+TrueClean occupies a third position: **transparent analysis + AI-assisted judgment + human-confirmed execution**. The AI never deletes anything on its own. It analyzes, recommends, and prepares the action — you press the final button. Every destructive operation is guarded by protected-path checks, defaults to the trash, and is reversible via `CleanManifest`.
+
+---
+
+## Architecture
+
+TrueClean is a Tauri 2 desktop app: a **Rust backend** performs all filesystem operations and AI orchestration, while a **React frontend** handles visualization and interaction. The two communicate via Tauri IPC (commands + events). The frontend never touches the filesystem or network directly — all capabilities are exposed through the backend.
 
 ```mermaid
 graph TB
-    subgraph Frontend["React 18 + TS 前端"]
-        UI["UI 组件层"] --> Stores["zustand 状态层"]
-        Stores --> IPC["ipc.ts 封装层"]
+    subgraph Frontend["React 18 + TS + Vite 6 Frontend"]
+        UI["UI Components<br/>layout / scan / cleanup / agent / settings"]
+        Stores["State Layer (zustand)<br/>scanStore · agentStore · settingsStore"]
+        IPC["IPC Wrapper<br/>src/lib/ipc.ts"]
     end
-    subgraph Backend["Rust + Tauri 2 后端"]
-        Cmds["Commands 层"] --> Core["核心业务<br/>scanner · cleaning · agent"]
-        Core --> State["AppState"]
+    subgraph Backend["Rust + Tauri 2 Backend"]
+        Cmds["Commands Layer<br/>scan · cleanup · system · agent · settings"]
+        Core["Core Business<br/>scanner · cleaning · agent"]
+        State["AppState<br/>settings · cancels · last_scan"]
     end
-    IPC -. "invoke / emit" .- Cmds
-    Core --> FS["文件系统 / 回收站"]
-    Core -. "HTTP 流式" .-> LLM["LLM Provider<br/>Claude · OpenAI · Ollama"]
+    subgraph External["External"]
+        FS["Filesystem<br/>(disk / trash)"]
+        LLM["LLM Provider<br/>Claude · OpenAI · Ollama · DeepSeek"]
+    end
+
+    UI --> Stores
+    Stores --> IPC
+    IPC -. "invoke command" .-> Cmds
+    Cmds -. "emit event" .-> IPC
+    Cmds --> Core
+    Core --> State
+    Core --> FS
+    Core -. "HTTP streaming" .-> LLM
 ```
 
-> 完整架构与数据流图见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+### Layered Responsibilities
+
+| Layer | Responsibility | Does NOT |
+|---|---|---|
+| **UI Components** | Render, interact, five states (empty/loading/error/result/progress) | Never `invoke` directly, never touch filesystem |
+| **State Layer (zustand)** | Hold UI state, subscribe to backend events | Contains no business logic |
+| **IPC Wrapper (ipc.ts)** | Type-safe command calls + event listening | The only place allowed to `invoke` |
+| **Commands Layer** | Thin wrapper for Tauri commands, param validation, state read/write | Contains no core algorithms |
+| **Core Business** | Real algorithms for scan/clean/agent | Does not emit events directly (via commands) |
+| **AppState** | Global shared state: settings, cancel flags, last scan cache | — |
+
+> Full architecture and data flow: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ---
 
-##  快速开始
+## Getting Started
 
-### 前置要求
+### Prerequisites
 
-- [Rust](https://rustup.rs)（stable，≥ 1.77）
+- [Rust](https://rustup.rs) (stable, ≥ 1.77)
 - [Node.js](https://nodejs.org) ≥ 18
 - [pnpm](https://pnpm.io)
-- Linux 还需 [Tauri 系统依赖](https://tauri.app/start/prerequisites/)（webkit2gtk 等）
+- Linux additionally requires [Tauri system dependencies](https://tauri.app/start/prerequisites/) (webkit2gtk, etc.)
 
-### 开发运行
-
-```bash
-pnpm install            # 安装前端依赖
-pnpm tauri dev          # 开发模式（启动 Vite + 弹出 Tauri 窗口，首次编译约 1-2 分钟）
-```
-
-### 构建安装包
+### Development
 
 ```bash
-pnpm tauri build        # 产出对应平台的安装包（.dmg / .msi / .AppImage）
+pnpm install            # Install frontend dependencies
+pnpm tauri dev          # Development mode (launches Vite + Tauri window, first compile ~1-2 min)
 ```
 
-### 验证（不弹窗）
+### Verification (without launching window)
 
 ```bash
-pnpm build                         # 前端类型检查 + 打包
-cd src-tauri && cargo check        # 后端编译检查
-cd src-tauri && cargo test --lib   # 后端单元测试
+pnpm build                         # Frontend type check + build
+cd src-tauri && cargo check        # Backend compile check
+cd src-tauri && cargo test --lib   # Backend unit tests
 ```
-
-### 配置 AI
-
-应用内打开「设置」：
-- **Provider**：`claude`（默认）/ `openai` / `ollama`
-- **Model**：如 `claude-sonnet-4-6`、`gpt-4o`、`llama3.1` 等
-- 填入对应 **API Key**（Claude / OpenAI）或 **Ollama 地址**（默认 `http://localhost:11434`）
-
-> Key 仅保存在本地配置文件，应用不上传、不内置任何密钥。详见 [docs/SECURITY.md](docs/SECURITY.md)。
-
-📖 完整使用手册见 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)。
 
 ---
 
-##  安全设计
+## Configuration
 
-TrueClean 会删除文件，安全是产品存在前提：
+Open **Settings** in the app:
 
-- **删除默认走回收站**（可恢复）；永久删除需显式选择。
-- **保护路径红线**：`is_protected` 硬编码三平台系统关键路径（`/System`、`/usr`、`C:\Windows` 等），`clean_paths`/`empty_trash` 强制过滤。
-- **一键撤销**：`CleanManifest` 快照 + `restore_last` 还原最近一次回收站清理。
-- **所有破坏性操作二次确认**：UI 弹框显示删什么、释放多少。
-- **AI 安全红线**：系统提示词禁止建议删系统路径；工具内部 `is_protected` 兜底；默认 `toTrash=true`。
-- **不上传用户数据**：与 LLM 只交换路径摘要 + 体积，不传文件内容。
-- **API Key 仅存本地**：不内置、不上传。
+- **Provider**: `claude` (default) / `openai` / `ollama` / `deepseek`
+- **Model**: e.g. `claude-sonnet-4-6`, `gpt-4o`, `llama3.1`, `deepseek-chat`
+- **API Key**: Enter the key for Claude / OpenAI / DeepSeek (stored in OS keychain)
+- **Base URL**: Custom connection address supported for all providers
+- **Ollama URL**: Default `http://localhost:11434`
 
-详见威胁模型与安全分析：[docs/SECURITY.md](docs/SECURITY.md)。
+### Settings Panel Sections
+
+The settings panel is organized into five sections:
+
+1. **AI Assistant** — Provider selection, model config, API Key input with keychain storage, custom base URL
+2. **Scan Options** — Symlink following, hidden files, max depth, subitem count
+3. **Cleaning Behavior** — Trash by default, permanent delete opt-in
+4. **Appearance** — Language (Chinese/English) and theme (light/dark) switching
+5. **Permission Status** — Full Disk Access / Admin / Helper authorization status and entry points
+
+> Keys are stored in the OS keychain for security. The app never uploads or bundles any keys. See [docs/SECURITY.md](docs/SECURITY.md).
+
+📖 Full user guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 
 ---
 
-##  技术栈
+## Security Model
 
-| 层 | 选型 |
+TrueClean deletes files — security is not an add-on, it is the premise of the product's existence.
+
+- **Default to trash** (recoverable); permanent delete requires explicit choice.
+- **Protected path red line**: `is_protected` hardcodes critical system paths for all three platforms (`/System`, `/usr`, `C:\Windows`, etc.). `clean_paths` / `empty_trash` forcibly filter them.
+- **One-click undo**: `CleanManifest` snapshot + `restore_last` restores the most recent trash cleanup.
+- **Two-step confirmation for all destructive operations**: UI dialog shows what will be deleted and how much space will be freed.
+- **AI safety red line**: The system prompt forbids recommending deletion of system paths; tools internally enforce `is_protected` as a backstop; default `toTrash=true`.
+- **No user data upload**: Only path summaries + sizes are exchanged with the LLM, never file contents.
+- **API Key stored in OS keychain**: Never bundled, never uploaded.
+- **Independent review agent**: Before `clean_paths` executes, an independent LLM review verifies the path list is safe to delete. If rejected, cleanup is skipped; if review fails (network error), it fails open to user confirmation only.
+
+### Threat Model
+
+| Risk | Severity | Mitigation | Residual Risk |
+|---|---|---|---|
+| R1 Delete system path | Critical | `is_protected` hardcoded red line, forced filtering | Very low |
+| R2 Delete user data | High | Default `to_trash=true`, UI confirmation, safe/confirm distinction | User chooses permanent delete |
+| R3 Uninstaller residual damage | Medium | Uninstaller defaults to trash, residuals constrained by `is_protected` | Residual path false positive |
+| R4 Agent unauthorized delete | High | Tools default `toTrash=true`, `is_protected` backstop, confirmation flow + independent review | LLM refuses confirmation (no execution) |
+| R5 API Key leak | High | Key stored in OS keychain, never uploaded/bundled | Local file read by attacker |
+| R6 Path/filename leak | Medium | Tool results return only path summary + size, no file content | Path itself contains sensitive info |
+| R7 Permanent delete no undo | High | Default to trash, `CleanManifest` only for `to_trash` | User explicitly chooses permanent |
+
+Full threat model and security analysis: [docs/SECURITY.md](docs/SECURITY.md)
+
+---
+
+## AI Agent
+
+The built-in AI assistant is the differentiating feature of TrueClean. Unlike chat-only assistants, it can actually **call tools** that operate on your real scan results.
+
+### How It Works
+
+1. **Plan-First workflow**: The agent reads full context and produces a plan before any execution (never acts immediately).
+2. **Tool calling**: The agent invokes registered tools (scan, analyze, clean) via the provider's function-calling API.
+3. **Streaming**: Responses stream in real-time with tool-call visualization ("calling tool: xxx" + scanning light effect).
+4. **Independent review**: Before any destructive `clean_paths` call, an independent LLM review verifies path safety.
+5. **Human confirmation**: The final cleanup always requires your explicit confirmation in a dialog showing the review verdict.
+
+### Available Tools
+
+| Tool | Purpose |
 |---|---|
-| 桌面框架 | [Tauri 2](https://tauri.app)（体积小 ~10MB、原生性能、安全） |
-| 后端 | Rust（并行扫描内核：jwalk / rayon / blake3 / sysinfo / trash / walkdir） |
-| 前端 | React 18 + TypeScript + Vite 6 |
-| 状态管理 | zustand |
-| 可视化 | d3-hierarchy（Treemap / Sunburst）+ d3-shape |
-| AI | 多 Provider 适配（Claude / OpenAI / Ollama）+ 工具调用 + 流式 |
-| 平台 | macOS / Windows / Linux |
+| `scan_path` | Scan a path and return categorized results |
+| `list_large_files` | List large files matching size/age criteria |
+| `list_duplicates` | List duplicate file groups by content hash |
+| `list_junk` | List identified junk file groups |
+| `list_apps` | List installed applications |
+| `analyze_path` | Analyze a specific path's composition |
+| `clean_paths` | Clean (trash/delete) specified paths — **destructive, reviewed + confirmed** |
+| `empty_trash` | Empty the trash — **destructive, reviewed + confirmed** |
+| `get_system_info` | Get system and disk information |
+
+### Supported Providers
+
+| Provider | Models | API Key Required | Custom Base URL |
+|---|---|---|---|
+| Anthropic Claude | claude-sonnet-4-6, claude-opus-4, etc. | Yes | Yes (default `https://api.anthropic.com`) |
+| OpenAI | gpt-4o, gpt-4o-mini, etc. | Yes | Yes |
+| DeepSeek | deepseek-chat, deepseek-reasoner | Yes | Yes |
+| Ollama (local) | llama3.1, qwen2, etc. | No | Yes (default `http://localhost:11434`) |
 
 ---
 
-##  项目结构
+## Tech Stack
+
+| Layer | Choice |
+|---|---|
+| Desktop framework | [Tauri 2](https://tauri.app) (small ~10MB binary, native performance, secure) |
+| Backend | Rust (parallel scan kernel: walkdir / rayon / blake3 / sysinfo / trash) |
+| Frontend | React 18 + TypeScript + Vite 6 |
+| State management | zustand |
+| Visualization | d3-hierarchy (Treemap / Sunburst) + d3-shape |
+| AI | Multi-provider adapter (Claude / OpenAI / Ollama / DeepSeek) + tool calling + streaming |
+| Secure storage | keyring (macOS Keychain / Windows Credential Manager / Linux Secret Service) |
+| Platforms | macOS / Windows / Linux |
+
+---
+
+## Project Structure
 
 ```
-src/                       前端（React + TS）
-├── lib/        types.ts(数据真源) · ipc.ts(命令封装) · format.ts
-├── store/      scanStore · agentStore · settingsStore (zustand)
-├── components/ layout · scan(可视化) · cleanup · agent · ui · settings
-└── styles/     tokens.css(设计令牌, 深浅双主题) · global.css
-
-src-tauri/src/             后端（Rust + Tauri）
-├── model.rs    全部 IPC 数据结构（与 types.ts 一一对应）
-├── scanner/    walker · tree · categories · engine（并行扫描内核）
-├── cleaning/   paths(平台路径表) · junk · large_old · trash · safety · duplicates · uninstaller · startup
-├── agent/      prompt · tools(工具调用) · runner(对话循环) · providers/(claude/openai/ollama)
-├── commands/   scan · cleanup · system · agent · settings（Tauri 命令）
-└── state.rs    全局状态（设置 / 取消标志 / 上次扫描缓存）
-
-docs/                      文档
-├── CONTRACT.md       数据契约（单一真源）
-├── AGENT_TASKS.md    多 Agent 任务书
-├── PRD.md            产品需求文档
-├── ARCHITECTURE.md   系统架构
-├── SECURITY.md       威胁模型与安全
-├── ROADMAP.md        路线图
-├── USER_GUIDE.md     用户手册
-└── PITCH.md          立项陈述
+TrueClean/
+├── .github/                    GitHub configuration
+│   ├── workflows/              CI/CD pipelines (ci.yml, release.yml)
+│   ├── ISSUE_TEMPLATE/         Issue templates
+│   └── pull_request_template.md
+├── docs/                       Documentation
+│   ├── PRD.md                  Product requirements document
+│   ├── ARCHITECTURE.md         System architecture
+│   ├── SECURITY.md             Threat model & security
+│   ├── CONTRACT.md             Data contract (single source of truth)
+│   ├── ROADMAP.md              Roadmap
+│   ├── USER_GUIDE.md           User guide
+│   ├── CI_CD.md                CI/CD documentation
+│   ├── ACCEPTANCE_CHECKLIST.md Acceptance checklist
+│   └── PITCH.md                Project pitch
+├── src/                        Frontend (React + TS)
+│   ├── components/             UI components
+│   │   ├── layout/             TopBar, Sidebar, BottomBar, PermissionGate
+│   │   ├── scan/               BubbleMap, CategoryBar, ScanView, ScanProgress
+│   │   ├── agent/              AgentPanel, MessageList, Composer, ToolCallCard
+│   │   ├── settings/           SettingsPanel
+│   │   └── ui/                 Button, Toast, ErrorBoundary, etc.
+│   ├── store/                  zustand stores (scan, agent, clean, settings)
+│   ├── hooks/                  useAgent, usePermissions, useScan, useTheme
+│   ├── lib/                    types.ts, ipc.ts, format.ts, lens-utils.ts
+│   ├── i18n/                   Internationalization (zh / en)
+│   └── styles/                 tokens.css, global.css
+├── src-tauri/                  Backend (Rust + Tauri)
+│   ├── src/
+│   │   ├── model.rs            All IPC data structures (mirrors types.ts)
+│   │   ├── scanner/            walker, tree, categories, engine (parallel scan kernel)
+│   │   ├── cleaning/           paths, junk, large_old, trash, safety, duplicates, uninstaller, startup
+│   │   ├── agent/              prompt, tools, runner, providers/ (claude/openai/ollama/deepseek)
+│   │   ├── commands/           scan, cleanup, system, agent, settings (Tauri commands)
+│   │   ├── permissions.rs      Permission detection (FDA/Admin/Helper)
+│   │   ├── secrets.rs          OS keychain secure storage
+│   │   └── state.rs            Global state (settings / cancel flags / last scan cache)
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   └── icons/                  App icons
+├── tests/                      E2E and test setup
+├── package.json
+├── LICENSE
+├── CONTRIBUTING.md
+└── README.md
 ```
 
-数据契约见 [`docs/CONTRACT.md`](docs/CONTRACT.md)：Rust `model.rs` 与 TS `types.ts` 为单一真源，改动需同步两侧。
+> Data contract: Rust `model.rs` and TS `types.ts` are the single source of truth. Changes must sync both sides. See [docs/CONTRACT.md](docs/CONTRACT.md).
 
 ---
 
-## 🗺️ Roadmap
+## Testing
 
-**已完成（基线）**
-- [x] 跨平台项目骨架（Tauri 2 + React + TS），前后端均可编译
-- [x] 并行磁盘扫描内核 + 分类 + 占比统计（含单元测试）
-- [x] Treemap / Sunburst / 分类条 / 文件树可视化
-- [x] 系统垃圾、大文件、重复文件、应用卸载、启动项的后端实现与面板
-- [x] AI Agent：多 Provider + 工具调用 + 流式 + 强力提示词
-- [x] 安全删除 + 保护路径 + CleanManifest 撤销
-- [x] 设置（Provider / Model / Key / 回收站默认）
+TrueClean maintains a comprehensive test suite across both layers:
 
-**进行中 / 待完善**
-- [ ] Windows / Linux 的清理路径表、卸载残留、启动项管理打磨
-- [ ] 真机端到端点测与 UI 五态、空态 / 错误态打磨
-- [ ] 国际化（中 / 英）完善
-- [ ] 应用图标与品牌视觉、打包签名 / 自动更新
-- [ ] CI/CD 与 E2E 测试
+```bash
+# Backend (Rust)
+cd src-tauri
+cargo test --lib              # Unit tests (160+ tests)
+cargo clippy --all-targets -- -D warnings   # Lint (zero warnings)
+cargo fmt --all -- --check    # Format check
 
-详见 [docs/ROADMAP.md](docs/ROADMAP.md)。
+# Frontend (TypeScript)
+pnpm test                     # Vitest unit tests (83+ tests)
+pnpm lint                     # ESLint (zero errors)
+pnpm build                    # TypeScript type check + Vite build
+```
 
----
+### Test Coverage
 
-##  贡献
-
-项目处于早期，欢迎 Issue 和 PR！请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解分支规范、数据契约约束与验收门禁。
-
-- **提交规范**：`<type>(<scope>): <简述>`，如 `feat(A2): 清理核心 + 安全撤销`
-- **验收门禁**：`cargo fmt/clippy/test` + `pnpm build` 全绿
-- **安全红线**：删除相关逻辑改动请格外谨慎并补充测试；请勿提交任何密钥
+- **Backend**: 160+ unit tests covering scanner, cleaning, agent, providers, safety, permissions
+- **Frontend**: 83+ unit tests covering stores, hooks, utilities, components
+- **CI**: Runs on macOS, Ubuntu, and Windows with `cargo fmt`, `cargo clippy -D warnings`, `cargo test`, `pnpm lint`, `pnpm test`, `pnpm build`
 
 ---
 
-##  License
+## Building
 
-MIT
+### Build installers
+
+```bash
+pnpm tauri build        # Produces platform-specific installers (.dmg / .msi / .AppImage)
+```
+
+Build artifacts are output to `src-tauri/target/release/bundle/`.
+
+### Release profile
+
+The release profile is optimized for small binary size:
+
+```toml
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+```
+
+---
+
+## Roadmap
+
+**Completed (baseline)**
+
+- [x] Cross-platform project skeleton (Tauri 2 + React + TS), both frontend and backend compile
+- [x] Parallel disk scan kernel + categorization + usage statistics (with unit tests)
+- [x] Treemap / Sunburst / category bar / file tree visualization
+- [x] System junk, large files, duplicates, app uninstaller, startup items backend + panels
+- [x] AI Agent: multi-provider + tool calling + streaming + strong system prompt
+- [x] Safe delete + protected paths + CleanManifest undo
+- [x] Settings (Provider / Model / Key / trash default / scan options / appearance)
+- [x] Secure API key storage in OS keychain
+- [x] First-launch permission gate
+- [x] Independent review agent before destructive cleanup
+- [x] macOS APFS firmlink dedup fix (prevented 200GB disk scanning as 10TB)
+- [x] Bilingual UI (Chinese/English) with settings sync
+
+**In progress / To be polished**
+
+- [ ] Windows / Linux cleanup path tables, uninstaller residuals, startup item management polish
+- [ ] Real-device end-to-end testing and UI five-state polish (empty / error states)
+- [ ] App icon and brand visual design, packaging signing / auto-update
+- [ ] E2E test suite expansion
+
+Full roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
+
+---
+
+## Contributing
+
+The project is in early development. Issues and PRs are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first to understand branching conventions, data contract constraints, and acceptance gates.
+
+- **Commit convention**: `<type>(<scope>): <description>`, e.g. `feat(scan): add firmlink dedup`
+- **Acceptance gate**: `cargo fmt` / `cargo clippy` / `cargo test` + `pnpm build` all green
+- **Safety red line**: Be extra careful with deletion-related logic changes and add tests; never commit any keys
+
+### Development workflow
+
+1. Fork the repository and create a feature branch
+2. Make your changes following the data contract (sync `model.rs` and `types.ts`)
+3. Run the full verification suite (fmt, clippy, test, lint, build)
+4. Open a PR referencing the relevant issue
+
+---
+
+## License
+
+[MIT](LICENSE) © TrueClean
