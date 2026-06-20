@@ -12,16 +12,35 @@ pub mod state;
 
 use state::AppState;
 
+// Windows 专属：注入与顶栏融合的自定义窗口控件（保留 Snap 布局）。
+// macOS 红绿灯位置由 tauri.conf.json 的 trafficLightPosition 控制。
+#[cfg(target_os = "windows")]
+use tauri::Manager;
+#[cfg(target_os = "windows")]
+use tauri_plugin_decorum::WebviewWindowExt;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_decorum::init())
         .manage(AppState::default())
         .setup(|app| {
             // Load persisted settings into managed state at startup.
             commands::settings::load_into_state(app.handle());
+
+            // Windows：隐藏原生标题栏，注入与顶栏融合的自定义窗口控件
+            // （保留 Snap 布局）。macOS 红绿灯位置由 tauri.conf.json 的
+            // trafficLightPosition 控制，无需在此处理。
+            #[cfg(target_os = "windows")]
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.create_overlay_titlebar();
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

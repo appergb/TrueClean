@@ -37,21 +37,33 @@
 }
 
 /* ============================= Top bar ========================== */
-/* 红绿灯悬浮模式（titleBarStyle: Overlay）：顶栏与窗口是一整块，
-   不加 border-bottom 横杠。左侧 padding 留出 macOS 红绿灯空间（~72px）。 */
+/* 红绿灯悬浮模式（titleBarStyle: Overlay）：顶栏与窗口是一整块，不加 border-bottom 横杠。
+   窗口控件空间按平台预留：macOS 左侧红绿灯 / Windows 右侧 decorum 控件 / Linux 无预留。
+   平台 class 由 main.tsx 在首屏前同步注入 <html>。 */
 .tc-topbar {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   height: var(--topbar-height);
-  /* macOS 红绿灯区域约 72px，右侧常规间距 */
-  padding: 0 var(--space-5) 0 72px;
+  /* 默认（Linux）：常规左右间距，无窗口控件预留 */
+  padding: 0 var(--space-5);
   background: var(--bg-elevated);
   border-bottom: none;
   z-index: 30;
   /* 允许拖动窗口（红绿灯悬浮模式下顶栏作为拖拽区域） */
   -webkit-app-region: drag;
+}
+
+/* macOS：左侧预留红绿灯空间。trafficLightPosition {x:20,y:20} 已将
+   红绿灯垂直居中于 52px 顶栏（红绿灯约 12px 高，中心 26px = 顶栏中线）。 */
+html.platform-macos .tc-topbar {
+  padding-left: 72px;
+}
+
+/* Windows：右侧预留 decorum 自定义窗口控件空间（3 个按钮约 138px）。 */
+html.platform-windows .tc-topbar {
+  padding-right: 142px;
 }
 
 /* 顶栏内的交互元素需要取消拖动区域，否则按钮无法点击 */
@@ -60,6 +72,15 @@
 .tc-topbar input,
 .tc-topbar select,
 .tc-topbar .tc-topbar__locale {
+  -webkit-app-region: no-drag;
+}
+
+/* Windows：decorum 注入的自定义窗口控件 — 融入顶栏，垂直居中，可点击 */
+html.platform-windows .decorum-tb-btn {
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   -webkit-app-region: no-drag;
 }
 
