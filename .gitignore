@@ -10,6 +10,9 @@ dist-ssr
 src-tauri/target
 src-tauri/gen
 
+# Local build artifacts (dmg etc.)
+release-artifacts/
+
 # Design reference (local only)
 Space Lens.html
 

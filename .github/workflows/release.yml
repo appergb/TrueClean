@@ -16,7 +16,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-14
+          - platform: macos-14   # Apple Silicon (arm64) → aarch64 .dmg
+          - platform: macos-13   # Intel (x86_64) → x64 .dmg
           - platform: ubuntu-22.04
           - platform: windows-latest
     runs-on: ${{ matrix.platform }}
@@ -86,7 +87,7 @@ jobs:
             Cross-platform disk cleaner with an AI agent.
 
             ### Downloads
-            - **macOS**: `.dmg` (Apple Silicon)
+            - **macOS**: `.dmg` (Apple Silicon `aarch64` + Intel `x64`)
             - **Windows**: `.msi` / `.exe`
             - **Linux**: `.AppImage` / `.deb`
 

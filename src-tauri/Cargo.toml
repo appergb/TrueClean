@@ -1,6 +1,6 @@
 [package]
 name = "trueclean"
-version = "0.1.0"
+version = "1.1.0"
 description = "TrueClean — cross-platform disk cleaner with an AI agent"
 authors = ["TrueClean"]
 edition = "2021"
