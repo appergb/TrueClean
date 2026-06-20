@@ -30,6 +30,8 @@ export const lens = {
     scannedFiles: "{count} files scanned",
     scannedBytes: "{size} counted",
     preparing: "Preparing…",
+    elapsed: "Elapsed {time}",
+    rate: "{rate}/s",
   },
 
   // Results stage — left column (folder list)

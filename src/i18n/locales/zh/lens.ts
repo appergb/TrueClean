@@ -29,6 +29,8 @@ export const lens = {
     scannedFiles: "已扫描 {count} 个文件",
     scannedBytes: "已计 {size}",
     preparing: "准备中…",
+    elapsed: "已用时 {time}",
+    rate: "{rate}/秒",
   },
 
   // Results stage — left column (folder list)

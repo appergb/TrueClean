@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useI18n } from "../../i18n";
 import { fmtBytes, fmtNum } from "../../lib/lens-utils";
@@ -15,6 +15,9 @@ import { useScanStore } from "../../store/scanStore";
  * The percentage is derived from `scannedBytes / volumeTotalBytes` when a
  * matching volume is found; otherwise it falls back to a slow auto-advance
  * so the ring always reads as "in progress".
+ *
+ * 长时间扫描时额外显示已用时间与扫描速率（files/s），让用户能确认扫描
+ * 在推进而非卡死。速率基于 1 秒滑动窗口的文件数差分计算。
  */
 export default function ScanProgress() {
   const { t } = useI18n();
@@ -26,6 +29,32 @@ export default function ScanProgress() {
   const scannedFiles = progress?.scannedFiles ?? 0;
   const scannedBytes = progress?.scannedBytes ?? 0;
   const currentPath = progress?.currentPath ?? scanTarget ?? "";
+
+  // 已用时间：从首次收到进度起计时。用 ref 记录开始时间，每秒 tick 一次。
+  const startRef = useRef<number | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
+  // 扫描速率：1 秒滑动窗口的文件数差分。
+  const lastSampleRef = useRef<{ files: number; at: number } | null>(null);
+  const [rate, setRate] = useState(0);
+
+  useEffect(() => {
+    if (startRef.current === null) startRef.current = Date.now();
+    const id = window.setInterval(() => {
+      if (startRef.current !== null) {
+        setElapsedSec(Math.floor((Date.now() - startRef.current) / 1000));
+      }
+      const now = Date.now();
+      const last = lastSampleRef.current;
+      if (last && now - last.at >= 1000) {
+        const dt = (now - last.at) / 1000;
+        setRate(Math.max(0, Math.round((scannedFiles - last.files) / dt)));
+        lastSampleRef.current = { files: scannedFiles, at: now };
+      } else if (last === null) {
+        lastSampleRef.current = { files: scannedFiles, at: now };
+      }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [scannedFiles]);
 
   const pct = useMemo(() => {
     const vol = volumes.find(
@@ -39,6 +68,15 @@ export default function ScanProgress() {
   }, [volumes, scanTarget, scannedBytes, scannedFiles]);
 
   const barWidth = `${pct}%`;
+
+  // 格式化已用时间：mm:ss 或 hh:mm:ss。
+  const elapsedStr = useMemo(() => {
+    const h = Math.floor(elapsedSec / 3600);
+    const m = Math.floor((elapsedSec % 3600) / 60);
+    const s = elapsedSec % 60;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+  }, [elapsedSec]);
 
   return (
     <div className="tc-scanning" role="status" aria-live="polite">
@@ -81,6 +119,15 @@ export default function ScanProgress() {
               {t("lens.scanning.scannedBytes", { size: "" }).split("{size}")[0]}
             </span>
             {fmtBytes(scannedBytes)}
+          </span>
+        </div>
+        <div className="tc-scanning__meta">
+          <span className="tc-scanning__stat-dim">
+            {t("lens.scanning.elapsed", { time: elapsedStr })}
+          </span>
+          <span className="tc-scanning__sep" />
+          <span className="tc-scanning__stat-dim">
+            {t("lens.scanning.rate", { rate: fmtNum(rate) })}
           </span>
         </div>
       </div>
