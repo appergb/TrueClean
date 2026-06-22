@@ -16,5 +16,8 @@ release-artifacts/
 # Design reference (local only)
 Space Lens.html
 
+# Local screenshots / reference images
+Picture/
+
 # Claude Code worktrees
 .claude/

@@ -9,6 +9,10 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# tauri-action 需要写权限来创建 Release 和上传资源
+permissions:
+  contents: write
+
 jobs:
   build-and-release:
     name: Build & Release (${{ matrix.platform }})

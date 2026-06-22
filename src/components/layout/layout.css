@@ -48,7 +48,8 @@
   height: var(--topbar-height);
   /* 默认（Linux）：常规左右间距，无窗口控件预留 */
   padding: 0 var(--space-5);
-  background: var(--bg-elevated);
+  /* 与主舞台区域同色（--bg），顶栏与窗口融为一体，不单独做出上边 */
+  background: var(--bg);
   border-bottom: none;
   z-index: 30;
   /* 允许拖动窗口（红绿灯悬浮模式下顶栏作为拖拽区域） */
