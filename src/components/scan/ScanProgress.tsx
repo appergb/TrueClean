@@ -12,7 +12,7 @@ import { useScanStore } from "../../store/scanStore";
  * path, a gradient progress bar, and live file/byte counters. A stop button
  * cancels the in-flight scan.
  *
- * The percentage is derived from `scannedBytes / volumeTotalBytes` when a
+ * The percentage is derived from `scannedBytes / volumeUsedBytes` when a
  * matching volume is found; otherwise it falls back to a slow auto-advance
  * so the ring always reads as "in progress".
  *
@@ -60,10 +60,12 @@ export default function ScanProgress() {
     const vol = volumes.find(
       (v) => v.mountPoint === scanTarget || scanTarget?.startsWith(v.mountPoint),
     );
-    if (vol && vol.totalBytes > 0) {
-      return Math.min(99, Math.round((scannedBytes / vol.totalBytes) * 100));
+    // 用 usedBytes 作为分母：扫描只覆盖已用空间，totalBytes 包含可用空间
+    // 会导致百分比永远到不了 100%（200GB 盘只用 80GB 时最高只能到 40%）。
+    if (vol && vol.usedBytes > 0) {
+      return Math.min(99, Math.round((scannedBytes / vol.usedBytes) * 100));
     }
-    // 无卷总量时——基于已扫描文件数缓慢自增，让圆环始终"活着"。
+    // 无卷用量时——基于已扫描文件数缓慢自增，让圆环始终"活着"。
     return Math.min(99, Math.floor(Math.log10(scannedFiles + 1) * 12));
   }, [volumes, scanTarget, scannedBytes, scannedFiles]);
 

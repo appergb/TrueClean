@@ -1,14 +1,18 @@
-//! Shape the raw walk output into the IPC model: trim each node's children to
-//! the largest N (recording how many were dropped), sort by size descending,
-//! and compute the per-category breakdown with percentages.
+//! Shape the raw walk output into the IPC model.
+//!
+//! 注意：自增量裁剪重构后，`RawNode` 的 children 已在 `walker::visit_dir`
+//! 阶段排序+裁剪到 `top_children` 个最大子节点。`build_dir_node` 只需做
+//! 简单的结构转换（RawNode → DirNode），无需再次排序裁剪，避免了全量树
+//! 的二次遍历和双倍内存峰值。
 
 use crate::model::{CategoryBreakdown, CategoryEntry, DirNode, ScanOptions};
 use crate::scanner::walker::{category_from_index, RawNode, CATEGORY_COUNT};
 
-/// Recursively convert a [`RawNode`] into a [`DirNode`], keeping only the
-/// `top_children` largest children per node (sorted by size descending) and
-/// recording the number omitted in `truncated_children`.
-pub(crate) fn build_dir_node(raw: RawNode, options: &ScanOptions) -> DirNode {
+/// Recursively convert a [`RawNode`] into a [`DirNode`].
+///
+/// 裁剪（排序 + truncate 到 top_children）已在 `walker::visit_dir` 阶段
+/// 增量完成，此处只需结构转换。`truncated_children` 直接透传。
+pub(crate) fn build_dir_node(raw: RawNode, _options: &ScanOptions) -> DirNode {
     let RawNode {
         name,
         path,
@@ -16,21 +20,13 @@ pub(crate) fn build_dir_node(raw: RawNode, options: &ScanOptions) -> DirNode {
         file_count,
         category,
         is_dir,
-        mut children,
+        children,
+        truncated_children,
     } = raw;
-
-    // Sort largest-first so truncation always drops the smallest branches.
-    children.sort_by_key(|a| std::cmp::Reverse(a.size_bytes));
-
-    let top = options.top_children;
-    let truncated_children = children.len().saturating_sub(top) as u32;
-    if children.len() > top {
-        children.truncate(top);
-    }
 
     let kept: Vec<DirNode> = children
         .into_iter()
-        .map(|child| build_dir_node(child, options))
+        .map(|child| build_dir_node(child, _options))
         .collect();
 
     DirNode {
@@ -92,28 +88,27 @@ mod tests {
             category: Category::Other,
             is_dir: true,
             children,
+            truncated_children: 0,
         }
     }
 
     #[test]
     fn truncates_and_sorts_children() {
+        // 注意：增量裁剪重构后，build_dir_node 不再排序裁剪——裁剪已在
+        // walker::visit_dir 阶段完成。此测试验证 build_dir_node 正确透传
+        // truncated_children 字段（由 walk 阶段设置）。
         let opts = ScanOptions {
             top_children: 2,
             ..ScanOptions::default()
         };
-        let root = raw(
-            "root",
-            60,
-            vec![
-                raw("a", 10, vec![]),
-                raw("b", 30, vec![]),
-                raw("c", 20, vec![]),
-            ],
-        );
+        // 模拟 walk 阶段已裁剪：保留 b(30) 和 c(20)，丢弃 a(10)。
+        let mut root = raw("root", 60, vec![raw("b", 30, vec![]), raw("c", 20, vec![])]);
+        // 手动设置 truncated_children（walk 阶段会做）。
+        root.truncated_children = 1;
         let node = build_dir_node(root, &opts);
         assert_eq!(node.children.len(), 2);
         assert_eq!(node.truncated_children, 1);
-        // Sorted descending: b(30), c(20); a(10) dropped.
+        // children 顺序由 walk 阶段排序决定，build_dir_node 保持原序。
         assert_eq!(node.children[0].name, "b");
         assert_eq!(node.children[1].name, "c");
     }

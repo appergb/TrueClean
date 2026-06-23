@@ -50,6 +50,10 @@ pub struct ScanStats {
 
 /// An un-trimmed node holding the full child set; converted to a
 /// `DirNode` by [`super::tree`].
+///
+/// 注意：`children` 在 `visit_dir` 返回前已**增量裁剪**到 `top_children`
+/// 个最大子节点（通过 `truncated_children` 记录丢弃数），避免全量树内存累积。
+/// 这使得几百万文件的扫描不会耗尽内存——每层只保留 top_children 个子树。
 pub(crate) struct RawNode {
     pub name: String,
     pub path: String,
@@ -58,6 +62,8 @@ pub(crate) struct RawNode {
     pub category: Category,
     pub is_dir: bool,
     pub children: Vec<RawNode>,
+    /// 被裁剪掉的子节点数量（已在 visit_dir 阶段增量计算）。
+    pub truncated_children: u32,
 }
 
 /// Mutable walk state guarded by a single mutex so a file record takes exactly
@@ -328,6 +334,7 @@ fn visit_dir(
                 category,
                 is_dir: true,
                 children: Vec::new(),
+                truncated_children: 0,
             });
         }
     };
@@ -422,7 +429,7 @@ fn visit_dir(
     // Recurse into subdirectories in parallel. Errors that are *not*
     // cancellation are swallowed per-subtree (skip the bad branch); a
     // cancellation bubbles up to abort the whole scan.
-    let children: Vec<RawNode> = if beyond_depth || subdirs.is_empty() {
+    let mut children: Vec<RawNode> = if beyond_depth || subdirs.is_empty() {
         Vec::new()
     } else {
         let results: Vec<AppResult<RawNode>> = subdirs
@@ -446,23 +453,34 @@ fn visit_dir(
     // P0-9: 当 beyond_depth 为 true 时，children 为空，但子目录的大小不能丢。
     // 用 shallow_dir_size 对每个子目录做一次不建树的递归求和，把大小与文件数
     // 累加到当前节点，保证父目录的 size_bytes / file_count 仍反映完整子树。
+    //
+    // 并行化：超出 max_depth 的子目录求和用 rayon par_iter，避免单线程串行瓶颈。
+    // 系统盘大量数据位于深层目录，串行求和会主导总耗时。
     let (children_size, children_files): (u64, u64) = if beyond_depth {
-        let mut size = 0u64;
-        let mut count = 0u64;
-        for (sub, _anc) in &subdirs {
-            if ctx.cancelled() {
-                return Err(AppError::Cancelled);
-            }
-            let (s, c) = shallow_dir_size(sub, ctx, scan_root);
-            size += s;
-            count += c;
-        }
+        let (size, count) = subdirs
+            .par_iter()
+            .map(|(sub, _anc)| shallow_dir_size(sub, ctx, scan_root))
+            .reduce(|| (0u64, 0u64), |(s1, c1), (s2, c2)| (s1 + s2, c1 + c2));
         (size, count)
     } else {
         (
             children.iter().map(|c| c.size_bytes).sum(),
             children.iter().map(|c| c.file_count).sum(),
         )
+    };
+
+    // 增量裁剪：在 visit_dir 返回前立即排序+裁剪到 top_children 个最大子节点。
+    // 这是解决大磁盘扫描内存累积的核心——每层只保留 top_children 个子树，
+    // 而非全量保留所有子节点直到 build_dir_node。几百万文件的扫描内存从
+    // 数百 MB 降到 top_children^depth * 节点大小（可控）。
+    let truncated_children = if !beyond_depth && children.len() > ctx.options.top_children {
+        // 按大小降序排序，保留最大的 top_children 个。
+        children.sort_by_key(|a| std::cmp::Reverse(a.size_bytes));
+        let dropped = children.len() - ctx.options.top_children;
+        children.truncate(ctx.options.top_children);
+        dropped as u32
+    } else {
+        0
     };
 
     Ok(RawNode {
@@ -473,6 +491,7 @@ fn visit_dir(
         category,
         is_dir: true,
         children,
+        truncated_children,
     })
 }
 
