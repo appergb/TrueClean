@@ -1,3 +1,9 @@
+// 字体打包引入：Inter Variable（UI 文本）+ JetBrains Mono（数字/路径/代码）。
+// 通过 @fontsource 打包 woff2，保证跨平台一致渲染，不依赖系统本地安装。
+import "@fontsource-variable/inter";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/500.css";
+import "@fontsource/jetbrains-mono/600.css";
 import "./styles/global.css";
 
 import React from "react";

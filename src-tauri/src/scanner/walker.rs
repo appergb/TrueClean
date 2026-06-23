@@ -238,8 +238,11 @@ pub(crate) fn walk<'a>(root: &Path, ctx: &ScanCtx<'a>) -> AppResult<RawNode> {
 ///
 /// 仅在扫描根为 `/` 或 `/System/Volumes/Data` 时触发这些排除规则，
 /// 避免影响用户对特定子目录的扫描。
+///
+/// 注意：`scan_root` 应为 canonical 路径（由 `scan_tree_with_stats` 入口
+/// canonicalize），这样符号链接形式的根路径也能正确匹配。
 fn should_skip_subdir(path: &Path, scan_root: &Path) -> bool {
-    let _path_str = path.to_string_lossy();
+    let path_str = path.to_string_lossy();
     let root_str = scan_root.to_string_lossy();
 
     // 仅当扫描根是 / 或 /System/Volumes/Data 时才应用排除规则。
@@ -253,15 +256,23 @@ fn should_skip_subdir(path: &Path, scan_root: &Path) -> bool {
     // Data 卷的内容已通过 firmlink 出现在 / 下；辅助卷不是用户数据。
     #[cfg(target_os = "macos")]
     {
-        if _path_str.starts_with("/System/Volumes/") {
+        if path_str.starts_with("/System/Volumes/") {
             return true;
         }
         // 虚拟文件系统。
-        if _path_str == "/dev" || _path_str.starts_with("/dev/") {
+        if path_str == "/dev" || path_str.starts_with("/dev/") {
             return true;
         }
         // 交换文件目录。
-        if _path_str == "/private/var/vm" || _path_str.starts_with("/private/var/vm/") {
+        if path_str == "/private/var/vm" || path_str.starts_with("/private/var/vm/") {
+            return true;
+        }
+        // /private 下的虚拟/系统目录（/etc → /private/etc, /tmp → /private/tmp）。
+        // 这些通过符号链接出现在 / 下，扫描 / 时会进入 /private，需排除系统目录。
+        if path_str == "/private/etc" || path_str.starts_with("/private/etc/") {
+            return true;
+        }
+        if path_str == "/private/tmp" || path_str.starts_with("/private/tmp/") {
             return true;
         }
     }
@@ -791,6 +802,19 @@ mod tests {
             Path::new("/private/var/vm"),
             Path::new("/")
         ));
+        // /private/etc 和 /private/tmp（/etc 和 /tmp 的 canonical 路径）应被跳过。
+        assert!(should_skip_subdir(
+            Path::new("/private/etc"),
+            Path::new("/")
+        ));
+        assert!(should_skip_subdir(
+            Path::new("/private/tmp"),
+            Path::new("/")
+        ));
+        assert!(should_skip_subdir(
+            Path::new("/private/etc/passwd"),
+            Path::new("/")
+        ));
 
         // 正常路径不应被跳过。
         assert!(!should_skip_subdir(Path::new("/Users"), Path::new("/")));
@@ -799,6 +823,11 @@ mod tests {
             Path::new("/")
         ));
         assert!(!should_skip_subdir(Path::new("/Library"), Path::new("/")));
+        // /private 下的用户目录（如 /private/var/folders）不应被跳过。
+        assert!(!should_skip_subdir(
+            Path::new("/private/var/folders"),
+            Path::new("/")
+        ));
 
         // 扫描根不是 / 时，不应用排除规则。
         assert!(!should_skip_subdir(

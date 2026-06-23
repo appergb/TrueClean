@@ -286,7 +286,6 @@ fn list_windows() -> Vec<StartupItem> {
 // ---------------------------------------------------------------------------
 
 /// Strip a trailing `.disabled` and known extensions for a friendly name.
-#[allow(dead_code)]
 fn display_name(file_name: &str) -> String {
     let base = file_name.strip_suffix(DISABLED_SUFFIX).unwrap_or(file_name);
     base.strip_suffix(".plist")

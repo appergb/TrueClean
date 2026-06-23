@@ -57,8 +57,12 @@
   --ring: 0 0 0 3px rgba(94, 106, 210, 0.4);
 
   /* ---- Typography ---- */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif;
+  /* Inter Variable（@fontsource 打包）+ 系统中文 fallback。
+     variable 字体支持 100-900 全字重，font-weight 可自由设置。 */
+  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui,
+    sans-serif;
+  /* JetBrains Mono（@fontsource 打包 400/500/600）+ 系统等宽 fallback。 */
   --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace,
     Menlo, Consolas, monospace;
 

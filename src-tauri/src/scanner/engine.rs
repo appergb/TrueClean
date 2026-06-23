@@ -53,8 +53,14 @@ pub fn scan_tree_with_stats(
         return Err(AppError::InvalidPath(root.to_string_lossy().into_owned()));
     }
 
+    // Canonicalize 扫描根，使符号链接形式的根路径也能正确触发 firmlink 排除。
+    // 例如用户通过文件夹选择器选了 /System/Volumes/Data 的符号链接路径，
+    // canonicalize 后会得到 /System/Volumes/Data，从而匹配 should_skip_subdir
+    // 的排除规则。canonicalize 失败时降级为原始路径（不阻塞扫描）。
+    let canonical_root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+
     let ctx = ScanCtx::new(options, cancel, on_progress);
-    let raw = walk(root, &ctx)?;
+    let raw = walk(&canonical_root, &ctx)?;
 
     let tree = build_dir_node(raw, options);
     let (totals, stats) = ctx.snapshot();
