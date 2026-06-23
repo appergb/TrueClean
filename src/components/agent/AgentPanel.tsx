@@ -140,8 +140,9 @@ export default function AgentPanel() {
           )}
         </div>
 
-        {/* Suggestions — 快捷回复 chips */}
-        {!isStreaming && (
+        {/* Suggestions — 快捷回复 chips
+            仅在无扫描目标时显示；选中磁盘/开始扫描后这些提示词不再需要。 */}
+        {!isStreaming && !scanTarget && (
           <div className="tc-right__suggestions">
             {suggestions.map((s) => (
               <button

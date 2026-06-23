@@ -9,7 +9,7 @@ export const agent = {
 
   // AgentPanel 面板标识与状态
   panel: {
-    title: "TrueClean Agent",
+    title: "Agent",
     subtitle: "磁盘清理与系统优化专家",
     expand: "展开助手",
     collapse: "收起助手",

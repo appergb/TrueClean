@@ -71,7 +71,11 @@ export default function ScanView() {
             <button
               type="button"
               className="tc-landing__disk-pick"
-              onClick={() => setPickerOpen((v) => !v)}
+              onClick={() => {
+                setPickerOpen((v) => !v);
+                // 打开下拉菜单时刷新磁盘列表，确保插入/移除的外置盘及时反映。
+                void loadVolumes();
+              }}
               aria-haspopup="listbox"
               aria-expanded={pickerOpen}
             >
