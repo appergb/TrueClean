@@ -25,13 +25,9 @@ export const lens = {
 
   // Scanning stage
   scanning: {
-    title: "Visualizing storage…",
+    title: "Scanning…",
     stop: "Stop",
-    scannedFiles: "{count} files scanned",
-    scannedBytes: "{size} counted",
     preparing: "Preparing…",
-    elapsed: "Elapsed {time}",
-    rate: "{rate}/s",
   },
 
   // Results stage — left column (folder list)

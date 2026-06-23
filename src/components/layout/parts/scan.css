@@ -1,0 +1,307 @@
+/* ============================= Landing ========================= */
+.tc-landing {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-10);
+  animation: fadeup var(--duration-normal) ease;
+}
+
+/* 应用图标 — 替代原先的透镜扫描动画，居中展示 TrueClean 图标 */
+.tc-landing__icon {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 32px rgba(94, 106, 210, 0.25));
+}
+
+.tc-landing__copy {
+  text-align: center;
+  max-width: 480px;
+}
+
+.tc-landing__title {
+  margin: 0 0 var(--space-3);
+  font-size: 2.5rem;
+  font-weight: var(--weight-thin);
+  letter-spacing: -0.8px;
+  line-height: 1.1;
+}
+
+.tc-landing__desc {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: 1.6;
+  color: var(--text-faint);
+  font-weight: var(--weight-normal);
+  white-space: pre-line;
+}
+
+.tc-landing__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.tc-landing__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.tc-landing__disk-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 9px 14px;
+  cursor: pointer;
+  color: var(--text);
+  font-family: var(--font-sans);
+  transition: border-color var(--duration-fast) ease;
+}
+.tc-landing__disk-pick:hover {
+  border-color: var(--border-faint);
+}
+
+.tc-landing__picker {
+  position: relative;
+}
+
+.tc-landing__picker-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 100%;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 40;
+  animation: fadeup var(--duration-fast) ease;
+}
+
+.tc-landing__picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-align: left;
+  transition: background var(--duration-fast) ease;
+}
+.tc-landing__picker-item:hover {
+  background: var(--surface-2);
+}
+.tc-landing__picker-item.is-active {
+  background: var(--surface-3);
+}
+
+.tc-landing__picker-name {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-landing__picker-size {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  flex: none;
+}
+
+.tc-landing__disk-name {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+
+.tc-landing__disk-size {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+.tc-landing__scan-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--action);
+  color: var(--action-contrast);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 10px 22px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.1px;
+  box-shadow:
+    0 5px 2px rgba(0, 0, 0, 0.01),
+    0 3px 2px rgba(0, 0, 0, 0.04),
+    0 1px 1px rgba(0, 0, 0, 0.07);
+  transition: transform var(--duration-fast) var(--ease-out-expo),
+    filter var(--duration-fast) ease;
+}
+.tc-landing__scan-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+.tc-landing__scan-btn:active {
+  transform: scale(0.98);
+}
+
+.tc-landing__alt {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-decoration: none;
+  transition: color var(--duration-fast) ease;
+}
+.tc-landing__alt:hover {
+  color: var(--text-faint);
+}
+
+/* ============================= Scanning ======================== */
+.tc-scanning {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-10);
+  padding: var(--space-10);
+  animation: fadeup var(--duration-fast) ease;
+}
+
+.tc-scanning__ring {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tc-scanning__ring-outer {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-faint);
+}
+
+.tc-scanning__sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-full);
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(2, 184, 204, 0.65) 300deg,
+    var(--accent-strong) 358deg,
+    transparent 360deg
+  );
+  animation: lensspin 1.1s linear infinite;
+  -webkit-mask: radial-gradient(circle, transparent 60%, #000 61%);
+  mask: radial-gradient(circle, transparent 60%, #000 61%);
+}
+
+.tc-scanning__dashed {
+  position: absolute;
+  inset: 46px;
+  border-radius: var(--radius-full);
+  border: 1px dashed var(--border-faint);
+  animation: lensspinrev 9s linear infinite;
+}
+
+/* 中心脉冲点——替代原先的百分比数字，给不确定型进度一个“活着”的焦点。 */
+.tc-scanning__core {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-full);
+  background: radial-gradient(circle, var(--accent-soft) 0%, transparent 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: lenspulse 1.8s var(--ease-out-expo) infinite;
+}
+.tc-scanning__core::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  background: var(--accent-gradient);
+  box-shadow: 0 0 16px rgba(2, 184, 204, 0.55);
+}
+
+.tc-scanning__body {
+  width: min(560px, 86vw);
+  text-align: center;
+}
+
+.tc-scanning__title {
+  font-size: 22px;
+  font-weight: var(--weight-normal);
+  letter-spacing: -0.3px;
+  margin-bottom: var(--space-2);
+}
+
+.tc-scanning__path-wrap {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tc-scanning__path {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.tc-scanning__stop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 9px 18px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  transition: border-color var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.tc-scanning__stop:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}

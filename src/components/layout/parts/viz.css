@@ -1,0 +1,445 @@
+/* ============================= Bubble ========================== */
+.tc-bubble {
+  position: absolute;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: box-shadow var(--duration-fast) ease,
+    border-color var(--duration-fast) ease, transform var(--duration-fast) ease;
+}
+
+.tc-bubble__label {
+  pointer-events: none;
+  padding: 6px;
+}
+
+.tc-bubble__name {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text);
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-bubble__size {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.tc-bubble--agg {
+  cursor: default;
+}
+
+.tc-bubble__name--agg {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-weight: var(--weight-medium);
+}
+
+.tc-bubble__size--agg {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.tc-bubble.is-selected,
+.tc-bubble.is-hovered {
+  transform: scale(1.02);
+}
+
+.tc-bubble__check {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transition: opacity var(--duration-fast) ease, background var(--duration-fast) ease;
+}
+.tc-bubble:hover .tc-bubble__check,
+.tc-bubble.is-selected .tc-bubble__check,
+.tc-bubble__check.is-checked {
+  opacity: 1;
+}
+.tc-bubble__check.is-checked {
+  background: var(--action);
+  border-color: var(--action);
+}
+
+/* 部分选中状态：目录本身未勾选，但子项有勾选。
+   浅绿半填充徽章 + 虚线边框提示用户"里面有内容被选中"。 */
+.tc-bubble:hover .tc-bubble__check.is-partial,
+.tc-bubble.is-selected .tc-bubble__check.is-partial,
+.tc-bubble__check.is-partial {
+  opacity: 1;
+}
+.tc-bubble__check.is-partial {
+  background: color-mix(in oklch, var(--good) 20%, var(--bg-elevated));
+  border-color: color-mix(in oklch, var(--good) 60%, transparent);
+}
+.tc-bubble__check-partial-dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--good);
+}
+
+/* 部分选中气泡的虚线边框动画提示 */
+.tc-bubble.is-partial-checked {
+  animation: partial-pulse 2s ease-in-out infinite;
+}
+@keyframes partial-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+.tc-bubble__tip-val--mono {
+  font-family: var(--font-mono);
+}
+
+.tc-bubble__tip {
+  position: absolute;
+  z-index: 45;
+  pointer-events: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border-faint);
+  border-radius: 9px;
+  padding: 11px 13px;
+  box-shadow: var(--shadow-lg);
+  min-width: 186px;
+}
+
+.tc-bubble__tip-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: var(--space-2);
+}
+
+.tc-bubble__tip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.tc-bubble__tip-name {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.tc-bubble__tip-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 3px 14px;
+  font-size: 11px;
+}
+
+.tc-bubble__tip-key {
+  color: var(--text-dim);
+}
+
+.tc-bubble__tip-val {
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.tc-bubble__tip-hint {
+  margin-top: var(--space-2);
+  padding-top: 7px;
+  border-top: 1px solid var(--border-strong);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* ============================= Chat messages =================== */
+.tc-msg {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  animation: msgin var(--duration-fast) ease;
+}
+
+.tc-msg--user {
+  justify-content: flex-end;
+}
+
+.tc-msg__avatar {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 7px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.tc-msg__bubble {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-3);
+  border: 1px solid var(--border-faint);
+  border-radius: 13px;
+  border-top-left-radius: 4px;
+  padding: 12px 13px;
+}
+
+.tc-msg__bubble--user {
+  max-width: 84%;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 13px;
+  border-top-right-radius: 4px;
+  padding: 9px 12px;
+  flex: none;
+}
+
+.tc-msg__text {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  white-space: pre-line;
+}
+
+.tc-msg__text--user {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #eef0f3;
+  white-space: pre-line;
+}
+
+.tc-msg__tools {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: var(--space-3);
+}
+
+.tc-msg__tool {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.tc-msg__tool-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--good);
+  box-shadow: 0 0 5px var(--good);
+  flex: none;
+}
+
+.tc-msg__tool-name {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  flex: none;
+}
+
+.tc-msg__tool-arg {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  text-align: right;
+}
+
+.tc-msg__groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: 11px;
+}
+
+.tc-msg__group {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 13px;
+}
+
+.tc-msg__group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+
+.tc-msg__group-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tc-msg__group-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+}
+
+.tc-msg__group-title {
+  font-size: 11.5px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.1px;
+}
+
+.tc-msg__group-sum {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.tc-msg__group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.tc-msg__group-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.tc-msg__group-item-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  margin-top: 4px;
+  flex: none;
+}
+
+.tc-msg__group-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tc-msg__group-item-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.tc-msg__group-item-name {
+  font-size: 11.5px;
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-msg__group-item-size {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  flex: none;
+}
+
+.tc-msg__group-item-note {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  line-height: 1.45;
+  margin-top: 1px;
+}
+
+.tc-msg__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.tc-msg__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: var(--radius-md);
+  padding: 8px 13px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+  border: 1px solid var(--border-faint);
+  background: var(--bg-elevated);
+  color: var(--text);
+  transition: filter var(--duration-fast) ease;
+}
+.tc-msg__action:hover {
+  filter: brightness(1.08);
+}
+
+.tc-msg__action--clean {
+  border-color: rgba(39, 166, 68, 0.5);
+}
+
+.tc-msg__action--review {
+  border-color: rgba(199, 154, 78, 0.5);
+}
+
+.tc-msg__action--apply {
+  border: none;
+  background: var(--action);
+  color: var(--action-contrast);
+  font-weight: var(--weight-semibold);
+}
+
+.tc-msg__action-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  flex: none;
+}
+
+.tc-msg__typing {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  background: var(--surface-3);
+  border: 1px solid var(--border-faint);
+  border-radius: 13px;
+  border-top-left-radius: 4px;
+  padding: 13px 14px;
+}
+
+.tc-msg__typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  animation: dotblink 1s ease infinite;
+}
+.tc-msg__typing-dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.tc-msg__typing-dot:nth-child(3) {
+  animation-delay: 0.36s;
+}

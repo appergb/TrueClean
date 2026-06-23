@@ -24,13 +24,9 @@ export const lens = {
 
   // Scanning stage
   scanning: {
-    title: "正在可视化存储空间…",
+    title: "正在扫描…",
     stop: "停止",
-    scannedFiles: "已扫描 {count} 个文件",
-    scannedBytes: "已计 {size}",
     preparing: "准备中…",
-    elapsed: "已用时 {time}",
-    rate: "{rate}/秒",
   },
 
   // Results stage — left column (folder list)

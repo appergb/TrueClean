@@ -1,0 +1,374 @@
+/* ============================= Misc ============================= */
+.tc-space-7 {
+  width: 28px;
+}
+
+/* ============================= 权限引导卡片 ===================== */
+.tc-perm-guide {
+  display: flex;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--action);
+  border-radius: 10px;
+  margin: 12px 0;
+}
+
+.tc-perm-guide--compact {
+  padding: 10px 12px;
+  gap: 10px;
+}
+
+.tc-perm-guide__icon {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--action);
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.tc-perm-guide__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tc-perm-guide__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.tc-perm-guide__desc p {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin: 0 0 4px;
+}
+
+.tc-perm-guide__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.tc-perm-guide__actions .tc-btn {
+  font-size: 12px;
+  padding: 6px 12px;
+  height: auto;
+}
+
+/* ============================= Permission Gate ================== */
+/* 首次启动权限门 — 全屏覆盖，直到所有必需权限授予后才放行。 */
+.tc-gate {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: var(--space-6);
+  animation: fadeup var(--duration-normal) ease;
+}
+
+.tc-gate__spinner {
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: var(--radius-full);
+  animation: lensspin 0.8s linear infinite;
+}
+
+.tc-gate__card {
+  width: min(480px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.tc-gate__icon {
+  filter: drop-shadow(0 0 24px rgba(94, 106, 210, 0.3));
+}
+
+.tc-gate__title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.tc-gate__sub {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-muted);
+  text-align: center;
+  max-width: 380px;
+}
+
+.tc-gate__steps {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.tc-gate__step {
+  padding: var(--space-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast) ease;
+}
+.tc-gate__step.is-granted {
+  border-color: var(--good);
+  opacity: 0.7;
+}
+
+.tc-gate__step-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.tc-gate__step-num {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  color: var(--text-muted);
+  flex: none;
+}
+.tc-gate__step.is-granted .tc-gate__step-num {
+  background: var(--good);
+  border-color: var(--good);
+  color: var(--text-on-accent);
+}
+
+.tc-gate__step-label {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text);
+  flex: 1;
+}
+
+.tc-gate__step-status {
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  flex: none;
+}
+.tc-gate__step-status.is-ok {
+  background: rgba(46, 161, 135, 0.12);
+  color: var(--good);
+}
+.tc-gate__step-status.is-pending {
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+
+.tc-gate__step-desc {
+  margin: var(--space-2) 0 0;
+  padding-left: 36px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.tc-gate__step-action {
+  margin: var(--space-3) 0 0 var(--space-6);
+  height: 30px;
+  padding: 0 var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.tc-gate__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  width: 100%;
+  margin-top: var(--space-4);
+}
+
+/* ============================= Error / Cancel ================== */
+.tc-error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-10);
+  animation: fadeup var(--duration-normal) ease;
+}
+
+.tc-error__icon {
+  font-size: 48px;
+  line-height: 1;
+  color: var(--danger);
+  opacity: 0.85;
+}
+
+.tc-error__title {
+  font-size: 22px;
+  font-weight: var(--weight-normal);
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+
+.tc-error__msg {
+  max-width: 420px;
+  text-align: center;
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+/* ============================= TopBar rescan =================== */
+.tc-topbar__rescan {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--text-faint);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  transition: border-color var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.tc-topbar__rescan:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* ============================= Settings Panel ================== */
+.tc-settings-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 9, 10, 0.72);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 80;
+  animation: fadeup var(--duration-fast) ease;
+}
+
+.tc-settings {
+  width: min(680px, 92vw);
+  max-height: 86vh;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tc-settings__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.tc-settings__title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin: 0;
+}
+
+.tc-settings__sub {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin: 2px 0 0;
+}
+
+.tc-settings__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  color: var(--text-dim);
+  cursor: pointer;
+  flex: none;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.tc-settings__close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.tc-settings__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+.tc-settings__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border);
+  flex: none;
+}
+
+.tc-settings__lang-btn {
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) ease, color var(--duration-fast) ease,
+    background var(--duration-fast) ease;
+}
+.tc-settings__lang-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.tc-settings__lang-btn.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface);
+}
+.tc-settings__lang-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}

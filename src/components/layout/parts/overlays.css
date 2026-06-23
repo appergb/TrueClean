@@ -1,0 +1,192 @@
+/* ============================= Confirm modal =================== */
+.tc-confirm-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 9, 10, 0.72);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* z-index 85：与 agent ConfirmDialog 对齐，高于 SettingsPanel(80)，
+     低于 PermissionGate(90) 和 Toast(100)。 */
+  z-index: 85;
+  animation: fadeup var(--duration-fast) ease;
+}
+
+.tc-confirm {
+  width: min(440px, 90vw);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-6);
+}
+
+.tc-confirm__head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: var(--space-4);
+}
+
+.tc-confirm__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: rgba(235, 87, 87, 0.12);
+  border: 1px solid rgba(235, 87, 87, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.tc-confirm__title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.2px;
+}
+
+.tc-confirm__desc {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+
+.tc-confirm__list {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-5);
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tc-confirm__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tc-confirm__item-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.tc-confirm__item-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.tc-confirm__item-name {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-confirm__item-size {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  flex: none;
+}
+
+.tc-confirm__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tc-confirm__total {
+  font-size: var(--text-base);
+  color: var(--text-faint);
+}
+
+.tc-confirm__total-value {
+  font-family: var(--font-mono);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.tc-confirm__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.tc-confirm__cancel {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  transition: border-color var(--duration-fast) ease;
+}
+.tc-confirm__cancel:hover {
+  border-color: var(--border-faint);
+}
+
+.tc-confirm__confirm {
+  background: var(--danger);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--action-contrast);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  transition: filter var(--duration-fast) ease;
+}
+.tc-confirm__confirm:hover {
+  filter: brightness(1.08);
+}
+
+/* ============================= Toast =========================== */
+.tc-toast-inline {
+  position: absolute;
+  bottom: 78px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  padding: 11px 16px;
+  box-shadow: var(--shadow-lg);
+  animation: fadeup 0.25s ease;
+}
+
+.tc-toast-inline__icon {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: rgba(39, 166, 68, 0.16);
+  border: 1px solid var(--good);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tc-toast-inline__msg {
+  font-size: var(--text-base);
+  color: var(--text);
+}

@@ -88,6 +88,10 @@ pub(crate) struct ScanCtx<'a> {
     pub scanned_files: AtomicU64,
     pub scanned_bytes: AtomicU64,
     state: Mutex<ScanState>,
+    /// 已计入物理字节的 `(dev, ino)` 集合——硬链接去重，避免同一 inode 被
+    /// 多次完整计数（pnpm store / node_modules 等大量硬链接）。仅 unix 需要。
+    #[cfg(unix)]
+    seen_inodes: Mutex<std::collections::HashSet<(u64, u64)>>,
 }
 
 impl<'a> ScanCtx<'a> {
@@ -109,11 +113,36 @@ impl<'a> ScanCtx<'a> {
                 errors: 0,
                 permission_denied: 0,
             }),
+            #[cfg(unix)]
+            seen_inodes: Mutex::new(std::collections::HashSet::new()),
         }
     }
 
     fn cancelled(&self) -> bool {
         self.cancel.load(Ordering::Relaxed)
+    }
+
+    /// 一个常规文件应计入的字节数：取「逻辑大小」与「磁盘实占 `blocks*512`」的
+    /// 较小值——iCloud dataless / 稀疏文件按实占计，避免把云端体积当本地占用
+    /// （“200GB 盘扫出 >200GB”）；普通文件实占 ≥ 逻辑则取逻辑，避免块开销虚增。
+    /// 硬链接（`nlink > 1`）按 `(dev, ino)` 去重：首次计入、重复链接计 0
+    /// （调用方仍 `file_count += 1`，保证文件数与进度准确）。
+    #[cfg(unix)]
+    fn physical_size(&self, meta: &std::fs::Metadata) -> u64 {
+        use std::os::unix::fs::MetadataExt;
+        if meta.nlink() > 1 {
+            let key = (meta.dev(), meta.ino());
+            let mut seen = self.seen_inodes.lock().unwrap_or_else(|e| e.into_inner());
+            if !seen.insert(key) {
+                return 0;
+            }
+        }
+        meta.len().min(meta.blocks().saturating_mul(512))
+    }
+
+    #[cfg(not(unix))]
+    fn physical_size(&self, meta: &std::fs::Metadata) -> u64 {
+        meta.len()
     }
 
     fn record_file(&self, category: Category, size: u64, current_path: &Path) {
@@ -258,11 +287,16 @@ fn should_skip_subdir(path: &Path, scan_root: &Path) -> bool {
         return false;
     }
 
-    // macOS: 跳过 /System/Volumes/ 下的所有子目录。
-    // Data 卷的内容已通过 firmlink 出现在 / 下；辅助卷不是用户数据。
     #[cfg(target_os = "macos")]
     {
-        if path_str.starts_with("/System/Volumes/") {
+        // 整个只读系统卷：含 firmlink 重复源 /System/Volumes/Data（扫 / 时其内容
+        // 已通过 firmlink 出现在 /Users、/Library 等处，再进入会重复计数），以及
+        // /System/Library 等海量 SIP 系统文件——非用户可清理内容且拖慢扫描。
+        if path_str == "/System" || path_str.starts_with("/System/") {
+            return true;
+        }
+        // 其它已挂载磁盘——扫主盘不应连带扫外接/网络卷。
+        if path_str == "/Volumes" || path_str.starts_with("/Volumes/") {
             return true;
         }
         // 虚拟文件系统。
@@ -345,6 +379,8 @@ fn visit_dir(
     let mut subdirs: Vec<(PathBuf, Vec<PathBuf>)> = Vec::new();
     let mut file_size = 0u64;
     let mut file_count = 0u64;
+    // 直接文件的叶子节点（让最小单位是文件而非文件夹）。
+    let mut file_leaves: Vec<RawNode> = Vec::new();
 
     for entry in read.flatten() {
         if ctx.cancelled() {
@@ -392,7 +428,7 @@ fn visit_dir(
                         }
                     },
                     Ok(target) => {
-                        let size = target.len();
+                        let size = ctx.physical_size(&target);
                         file_size += size;
                         file_count += 1;
                         ctx.record_file(classify(&path, false), size, &path);
@@ -419,10 +455,26 @@ fn visit_dir(
             // clone allocates nothing).
             subdirs.push((path, ancestors.to_vec()));
         } else {
-            let size = meta.len();
+            let size = ctx.physical_size(&meta);
             file_size += size;
             file_count += 1;
-            ctx.record_file(classify(&path, false), size, &path);
+            let cat = classify(&path, false);
+            ctx.record_file(cat, size, &path);
+            file_leaves.push(RawNode {
+                name: display_name(&path),
+                path: path.to_string_lossy().into_owned(),
+                size_bytes: size,
+                file_count: 1,
+                category: cat,
+                is_dir: false,
+                children: Vec::new(),
+                truncated_children: 0,
+            });
+            // 有界：单目录文件极多时及时裁到 top_children，避免内存膨胀。
+            if file_leaves.len() > 1024 {
+                file_leaves.sort_by_key(|a| std::cmp::Reverse(a.size_bytes));
+                file_leaves.truncate(ctx.options.top_children.max(1));
+            }
         }
     }
 
@@ -468,6 +520,16 @@ fn visit_dir(
             children.iter().map(|c| c.file_count).sum(),
         )
     };
+
+    // 把最大的若干个直接文件作为叶子节点并入 children（让最小单位是文件）。
+    // 必须在 children_size 求和【之后】并入——文件体积已计入 file_size，
+    // 若在求和前并入会被重复计数。仅在正常展开（非 beyond_depth）时并入，
+    // 之后由下方“增量裁剪”把目录子节点与文件叶子按 size 一起裁到 top_children。
+    if !beyond_depth && !file_leaves.is_empty() {
+        file_leaves.sort_by_key(|a| std::cmp::Reverse(a.size_bytes));
+        file_leaves.truncate(ctx.options.top_children.max(1));
+        children.extend(file_leaves);
+    }
 
     // 增量裁剪：在 visit_dir 返回前立即排序+裁剪到 top_children 个最大子节点。
     // 这是解决大磁盘扫描内存累积的核心——每层只保留 top_children 个子树，
@@ -555,7 +617,7 @@ fn shallow_dir_size(dir: &Path, ctx: &ScanCtx, scan_root: &Path) -> (u64, u64) {
             size += s;
             count += c;
         } else {
-            let s = meta.len();
+            let s = ctx.physical_size(&meta);
             size += s;
             count += 1;
             ctx.record_file(classify(&path, false), s, &path);
@@ -795,6 +857,141 @@ mod tests {
         );
     }
 
+    /// 硬链接：同一 inode 的物理字节只计一次（防 pnpm/node_modules 重复计数），
+    /// 但文件数仍按链接条数计。
+    #[cfg(unix)]
+    #[test]
+    fn hardlinks_counted_once_in_bytes() {
+        let base = std::env::temp_dir().join(format!(
+            "tc_hardlink_{}_{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&base).unwrap();
+        let original = base.join("blob.bin");
+        fs::write(&original, vec![0u8; 4096]).unwrap();
+        std::fs::hard_link(&original, base.join("link2.bin")).unwrap();
+        std::fs::hard_link(&original, base.join("link3.bin")).unwrap();
+
+        let options = ScanOptions::default();
+        let cancel = AtomicBool::new(false);
+        let ctx = ScanCtx::new(&options, &cancel, &|_p| {});
+        let node = walk(&base, &ctx).unwrap();
+
+        // 3 个目录项，但物理字节只算一份（4096）。
+        assert_eq!(node.file_count, 3, "all hard links still count as files");
+        assert_eq!(
+            node.size_bytes, 4096,
+            "shared inode bytes counted once, got {}",
+            node.size_bytes
+        );
+
+        fs::remove_dir_all(&base).ok();
+    }
+
+    /// 稀疏文件：逻辑大小远大于磁盘实占时，按实占计（不把空洞当占用）。
+    #[cfg(unix)]
+    #[test]
+    fn sparse_file_counted_by_on_disk_size() {
+        use std::os::unix::fs::MetadataExt;
+        let base = std::env::temp_dir().join(format!(
+            "tc_sparse_{}_{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&base).unwrap();
+        let sparse = base.join("hole.bin");
+        let f = std::fs::File::create(&sparse).unwrap();
+        f.set_len(64 * 1024 * 1024).unwrap(); // 64MB 逻辑，全是空洞
+        drop(f);
+
+        let meta = std::fs::metadata(&sparse).unwrap();
+        // 仅当文件系统确实稀疏（实占 < 逻辑）时断言；否则跳过（某些 FS 会预分配）。
+        if meta.blocks().saturating_mul(512) < meta.len() {
+            let options = ScanOptions::default();
+            let cancel = AtomicBool::new(false);
+            let ctx = ScanCtx::new(&options, &cancel, &|_p| {});
+            let node = walk(&base, &ctx).unwrap();
+            assert!(
+                node.size_bytes < meta.len(),
+                "sparse file should count on-disk size ({}), not logical ({})",
+                node.size_bytes,
+                meta.len()
+            );
+        }
+
+        fs::remove_dir_all(&base).ok();
+    }
+
+    /// 文件叶子：目录的直接文件应作为 is_dir=false 的子节点出现（最小单位=文件）。
+    #[test]
+    fn files_appear_as_leaf_children() {
+        let base = std::env::temp_dir().join(format!(
+            "tc_leaf_{}_{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&base).unwrap();
+        fs::write(base.join("big.bin"), vec![0u8; 5000]).unwrap();
+        fs::write(base.join("small.bin"), vec![0u8; 100]).unwrap();
+
+        let options = ScanOptions::default();
+        let cancel = AtomicBool::new(false);
+        let ctx = ScanCtx::new(&options, &cancel, &|_p| {});
+        let node = walk(&base, &ctx).unwrap();
+
+        let leaves: Vec<_> = node.children.iter().filter(|c| !c.is_dir).collect();
+        assert_eq!(leaves.len(), 2, "两个文件都应作为叶子出现");
+        // 最大者优先排序（big 在前）。
+        assert_eq!(leaves[0].name, "big.bin");
+
+        fs::remove_dir_all(&base).ok();
+    }
+
+    /// 真实磁盘验证（默认忽略）：跑完整管线扫 `/`，打印总量/文件数/耗时 +
+    /// **结果树节点数 + 最大深度 + JSON 体积**，确认有界树修复后系统盘的
+    /// 结果 JSON 足够小（不再 146MB 卡死 webview）。
+    /// 运行：`cargo test --lib walk_real_root_diagnostic -- --ignored --nocapture`
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore]
+    fn walk_real_root_diagnostic() {
+        fn count_nodes(n: &crate::model::DirNode) -> usize {
+            1 + n.children.iter().map(count_nodes).sum::<usize>()
+        }
+        fn max_depth(n: &crate::model::DirNode) -> usize {
+            1 + n.children.iter().map(max_depth).max().unwrap_or(0)
+        }
+        let options = ScanOptions::default();
+        let cancel = AtomicBool::new(false);
+        let t0 = Instant::now();
+        let (result, stats) = crate::scanner::engine::scan_tree_with_stats(
+            std::path::Path::new("/"),
+            &options,
+            &cancel,
+            &|_p| {},
+        )
+        .unwrap();
+        let dt = t0.elapsed();
+        let gib = result.tree.size_bytes as f64 / 1024.0 / 1024.0 / 1024.0;
+        let json = serde_json::to_string(&result).unwrap();
+        eprintln!(
+            "扫 / 完整管线: {:.1} GiB, files={}, 耗时={:.1}s",
+            gib, result.tree.file_count, dt.as_secs_f64()
+        );
+        eprintln!(
+            ">>> 结果树节点数={} 最大深度={} JSON体积={:.1} MB <<<",
+            count_nodes(&result.tree),
+            max_depth(&result.tree),
+            json.len() as f64 / 1024.0 / 1024.0
+        );
+        eprintln!(
+            "skipped={} errors={} perm_denied={}",
+            stats.skipped, stats.errors, stats.permission_denied_count
+        );
+        assert!(gib < 245.0, "整盘单遍 < 245 GiB，实际 {gib:.1}");
+    }
+
     /// P0: should_skip_subdir 应正确识别 macOS APFS firmlink 重复路径。
     #[cfg(target_os = "macos")]
     #[test]
@@ -812,6 +1009,18 @@ mod tests {
         ));
         assert!(should_skip_subdir(
             Path::new("/System/Volumes/Data/Users"),
+            Path::new("/")
+        ));
+        // 整个 /System 被跳过（含 /System/Library 等 SIP 系统文件）。
+        assert!(should_skip_subdir(Path::new("/System"), Path::new("/")));
+        assert!(should_skip_subdir(
+            Path::new("/System/Library/Frameworks"),
+            Path::new("/")
+        ));
+        // 其它已挂载磁盘（外接盘）应被跳过。
+        assert!(should_skip_subdir(Path::new("/Volumes"), Path::new("/")));
+        assert!(should_skip_subdir(
+            Path::new("/Volumes/External"),
             Path::new("/")
         ));
         // /dev 虚拟文件系统应被跳过。
